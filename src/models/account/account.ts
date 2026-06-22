@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { Permissions, Plus, Subscription } from './subscription.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -87,28 +88,26 @@ export class Account extends YandexMusicModel {
  * Aggregated account status returned by `account/status`.
  *
  * @remarks
- * Some sub-objects (`permissions`, `subscription`, `plus`, `stationData`,
- * `barBelow`) are exposed as raw JSON for now and will be promoted to typed
- * models in a later release. The typed {@link Status.account} is sufficient to
- * drive {@link Client.init}.
+ * A few rarely-used sub-objects (`stationData`, `barBelow`) remain raw JSON; the
+ * commonly-used `permissions`, `subscription` and `plus` are typed.
  */
 export class Status extends YandexMusicModel {
   /** Account info. */
   account?: Account;
-  /** Permissions (raw JSON, pending a typed model). */
-  permissions?: JSONValue;
+  /** Granted permissions. */
+  permissions?: Permissions;
   /** Advertisement payload. */
   advertisement?: string;
-  /** Subscription info (raw JSON, pending a typed model). */
-  subscription?: JSONValue;
+  /** Subscription state. */
+  subscription?: Subscription;
   /** Offline cache track limit. */
   cacheLimit?: number;
   /** Whether the user is a sub-editor. */
   subeditor?: boolean;
   /** Sub-editor level. */
   subeditorLevel?: number;
-  /** Yandex Plus info (raw JSON, pending a typed model). */
-  plus?: JSONValue;
+  /** Yandex Plus status. */
+  plus?: Plus;
   /** Default email. */
   defaultEmail?: string;
   /** Allowed skips per hour. */
@@ -135,13 +134,10 @@ export class Status extends YandexMusicModel {
     }
     const model = new Status(client);
     assign(model, raw, [
-      'permissions',
       'advertisement',
-      'subscription',
       'cacheLimit',
       'subeditor',
       'subeditorLevel',
-      'plus',
       'defaultEmail',
       'skipsPerHour',
       'stationExists',
@@ -153,6 +149,9 @@ export class Status extends YandexMusicModel {
       'userhash',
     ]);
     model.account = Account.deJson(raw['account'], client) ?? undefined;
+    model.permissions = Permissions.deJson(raw['permissions'], client) ?? undefined;
+    model.subscription = Subscription.deJson(raw['subscription'], client) ?? undefined;
+    model.plus = Plus.deJson(raw['plus'], client) ?? undefined;
     return model;
   }
 }

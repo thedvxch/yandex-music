@@ -10,6 +10,7 @@ import {
   Credits,
   Metatags,
   Pin,
+  Status,
   Client,
   Dashboard,
   DeviceCode,
@@ -314,6 +315,23 @@ test('small-domain models parse their payloads', () => {
     trees: [{ title: 'Moods', navigationId: 'moods', leaves: [{ tag: 'happy', title: 'Happy' }] }],
   });
   assert.equal(metatags?.trees?.[0]?.leaves?.[0]?.tag, 'happy');
+});
+
+test('Status.deJson types permissions, subscription and plus', () => {
+  const status = Status.deJson({
+    account: { uid: 1, login: 'me' },
+    permissions: { until: '2030', values: ['feed-play'], default: ['feed-play'] },
+    plus: { hasPlus: true, isTutorialCompleted: false },
+    subscription: {
+      hadAnySubscription: true,
+      autoRenewable: [{ expires: '2030', vendor: 'App Store', product: { productId: 'p', price: { amount: 169, currency: 'RUB' } } }],
+    },
+  });
+  assert.ok(status);
+  assert.equal(status.account?.login, 'me');
+  assert.deepEqual(status.permissions?.values, ['feed-play']);
+  assert.equal(status.plus?.hasPlus, true);
+  assert.equal(status.subscription?.autoRenewable?.[0]?.product?.price?.amount, 169);
 });
 
 test('client exposes the new method surface', () => {

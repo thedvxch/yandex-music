@@ -30,6 +30,7 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
+    "src",
     "README.md"
   ],
   "scripts": {
@@ -37,7 +38,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json",
     "test": "node --import tsx --test test/**/*.test.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

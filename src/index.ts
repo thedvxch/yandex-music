@@ -76,6 +76,19 @@ export { Album, Label, TrackPosition, Deprecation, AlbumActionButton } from './m
 // Models — account
 export { Status, Account, PassportPhone } from './models/account/account.js';
 export {
+  Permissions,
+  Plus,
+  Price,
+  LicenceTextPart,
+  Product,
+  AutoRenewable,
+  NonAutoRenewable,
+  RenewableRemainder,
+  Deactivation,
+  Operator,
+  Subscription,
+} from './models/account/subscription.js';
+export {
   UserSettings,
   Settings,
   PermissionAlerts,
@@ -124,7 +137,19 @@ export { Landing, Block, BlockEntity, LandingList, ChartInfo, Chart, ChartItem }
 export { Genre } from './models/genre.js';
 
 // Models — rotor (radio)
-export { Id, Station, StationResult, Dashboard, Sequence, StationTracksResult } from './models/rotor/rotor.js';
+export {
+  Id,
+  Station,
+  StationResult,
+  Dashboard,
+  Sequence,
+  StationTracksResult,
+  Restrictions,
+  Enum,
+  DiscreteScale,
+  Value,
+  AdParams,
+} from './models/rotor/rotor.js';
 export type {
   RotorFeedbackType,
   RotorMoodEnergy,

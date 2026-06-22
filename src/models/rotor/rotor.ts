@@ -2,9 +2,8 @@
  * Rotor (radio) models.
  *
  * @remarks
- * Station settings, restrictions and ad params are exposed as raw JSON for now;
- * the structural models needed to browse stations and stream their tracks
- * ({@link Dashboard}, {@link StationResult}, {@link StationTracksResult}) are typed.
+ * Station {@link Restrictions} and {@link AdParams} are typed; per-station free-form
+ * settings remain raw JSON.
  *
  * @packageDocumentation
  */
@@ -13,6 +12,136 @@ import { Icon } from '../common.js';
 import { Track } from '../track/track.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
+
+/** A single possible value of a station {@link Enum} restriction. */
+export class Value extends YandexMusicModel {
+  /** Value key. */
+  value?: string;
+  /** Human-readable name. */
+  name?: string;
+
+  /** @see {@link Value} */
+  static deJson(raw: JSONValue | undefined, client?: Client): Value | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new Value(client);
+    assign(model, raw, ['value', 'name']);
+    return model;
+  }
+}
+
+/** An enumerated station restriction (a fixed set of possible values). */
+export class Enum extends YandexMusicModel {
+  /** Restriction type (`enum`). */
+  type?: string;
+  /** Restriction name. */
+  name?: string;
+  /** The possible values. */
+  possibleValues?: Value[];
+
+  /** @see {@link Enum} */
+  static deJson(raw: JSONValue | undefined, client?: Client): Enum | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new Enum(client);
+    assign(model, raw, ['type', 'name']);
+    model.possibleValues = deList(Value.deJson, raw['possibleValues'], client);
+    return model;
+  }
+}
+
+/** A discrete-scale station restriction (a min/max range). */
+export class DiscreteScale extends YandexMusicModel {
+  /** Restriction type (`discrete-scale`). */
+  type?: string;
+  /** Restriction name. */
+  name?: string;
+  /** Minimum value. */
+  min?: Value;
+  /** Maximum value. */
+  max?: Value;
+
+  /** @see {@link DiscreteScale} */
+  static deJson(raw: JSONValue | undefined, client?: Client): DiscreteScale | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new DiscreteScale(client);
+    assign(model, raw, ['type', 'name']);
+    model.min = Value.deJson(raw['min'], client) ?? undefined;
+    model.max = Value.deJson(raw['max'], client) ?? undefined;
+    return model;
+  }
+}
+
+/** The settings a station exposes for personalization. */
+export class Restrictions extends YandexMusicModel {
+  /** Language restriction. */
+  language?: Enum;
+  /** Diversity restriction. */
+  diversity?: Enum;
+  /** Mood restriction. */
+  mood?: DiscreteScale;
+  /** Energy restriction. */
+  energy?: DiscreteScale;
+  /** Combined mood/energy restriction. */
+  moodEnergy?: Enum;
+
+  /** @see {@link Restrictions} */
+  static deJson(raw: JSONValue | undefined, client?: Client): Restrictions | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new Restrictions(client);
+    model.language = Enum.deJson(raw['language'], client) ?? undefined;
+    model.diversity = Enum.deJson(raw['diversity'], client) ?? undefined;
+    model.mood = DiscreteScale.deJson(raw['mood'], client) ?? undefined;
+    model.energy = DiscreteScale.deJson(raw['energy'], client) ?? undefined;
+    model.moodEnergy = Enum.deJson(raw['moodEnergy'], client) ?? undefined;
+    return model;
+  }
+}
+
+/** Advertisement parameters attached to a station result. */
+export class AdParams extends YandexMusicModel {
+  /** Partner id. */
+  partnerId?: string | number;
+  /** Category id. */
+  categoryId?: string | number;
+  /** Page reference. */
+  pageRef?: string;
+  /** Target reference. */
+  targetRef?: string;
+  /** Extra parameters (for example `user:{ID}`). */
+  otherParams?: string;
+  /** Ad volume. */
+  adVolume?: number;
+  /** Genre id. */
+  genreId?: string;
+  /** Genre name. */
+  genreName?: string;
+
+  /** @see {@link AdParams} */
+  static deJson(raw: JSONValue | undefined, client?: Client): AdParams | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new AdParams(client);
+    assign(model, raw, [
+      'partnerId',
+      'categoryId',
+      'pageRef',
+      'targetRef',
+      'otherParams',
+      'adVolume',
+      'genreId',
+      'genreName',
+    ]);
+    return model;
+  }
+}
 
 /** A typed identifier of a rotor station (`{type}:{tag}`). */
 export class Id extends YandexMusicModel {
@@ -46,8 +175,8 @@ export class Station extends YandexMusicModel {
   geocellIcon?: Icon;
   /** Origin tag used in `from` parameters. */
   idForFrom?: string;
-  /** Playback restrictions (raw JSON, pending a typed model). */
-  restrictions?: JSONValue;
+  /** Playback restrictions (personalization options). */
+  restrictions?: Restrictions;
   /** Full image URL. */
   fullImageUrl?: string;
   /** MTS full image URL. */
@@ -61,7 +190,8 @@ export class Station extends YandexMusicModel {
       return null;
     }
     const model = new Station(client);
-    assign(model, raw, ['name', 'idForFrom', 'restrictions', 'fullImageUrl', 'mtsFullImageUrl']);
+    assign(model, raw, ['name', 'idForFrom', 'fullImageUrl', 'mtsFullImageUrl']);
+    model.restrictions = Restrictions.deJson(raw['restrictions'], client) ?? undefined;
     model.id = Id.deJson(raw['id'], client) ?? undefined;
     model.icon = Icon.deJson(raw['icon'], client) ?? undefined;
     model.mtsIcon = Icon.deJson(raw['mtsIcon'], client) ?? undefined;
@@ -75,10 +205,10 @@ export class Station extends YandexMusicModel {
 export class StationResult extends YandexMusicModel {
   /** The station. */
   station?: Station;
-  /** Station settings (raw JSON, pending a typed model). */
+  /** Station settings (free-form raw JSON). */
   settings?: JSONValue;
-  /** Ad parameters (raw JSON, pending a typed model). */
-  adParams?: JSONValue;
+  /** Ad parameters. */
+  adParams?: AdParams;
   /** Explanation text. */
   explanation?: string;
   /** Prerolls (raw JSON). */
@@ -96,8 +226,9 @@ export class StationResult extends YandexMusicModel {
       return null;
     }
     const model = new StationResult(client);
-    assign(model, raw, ['settings', 'adParams', 'explanation', 'prerolls', 'rupTitle', 'rupDescription', 'customName']);
+    assign(model, raw, ['settings', 'explanation', 'prerolls', 'rupTitle', 'rupDescription', 'customName']);
     model.station = Station.deJson(raw['station'], client) ?? undefined;
+    model.adParams = AdParams.deJson(raw['adParams'], client) ?? undefined;
     return model;
   }
 }
