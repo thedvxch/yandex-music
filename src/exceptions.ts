@@ -11,8 +11,8 @@
 
 /** Base class for every error raised by the library. */
 export class YandexMusicError extends Error {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: { cause?: unknown }) {
+    super(message, options);
     // Restore the prototype chain — required when targeting ES5/ES2015 down-level,
     // and harmless otherwise. Also gives every subclass a correct `name`.
     this.name = new.target.name;

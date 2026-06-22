@@ -9,29 +9,33 @@ import { Pager } from '../pager.js';
 import { User } from '../user.js';
 import { TrackId, TrackShort } from '../trackShort.js';
 import { Artist } from '../artist/artist.js';
+import {
+  MadeFor,
+  PlayCounter,
+  PlaylistAbsence,
+  OpenGraphData,
+  Brand,
+  CustomWave,
+  Contest,
+  PlaylistAvailability,
+} from './promo.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
 /**
  * A playlist (user-made or editorial).
- *
- * @remarks
- * A number of rarely used sub-objects (`madeFor`, `playCounter`,
- * `playlistAbsence`, `contest`, `ogData`, `branding`, `customWave`, `trailer`,
- * dummy covers) are currently exposed as raw JSON and will be promoted to typed
- * models in a later release.
  */
 export class Playlist extends YandexMusicModel {
   /** Owner of the playlist. */
   owner?: User;
   /** Playlist cover. */
   cover?: Cover;
-  /** "Made for" personalization (raw JSON, pending a typed model). */
-  madeFor?: JSONValue;
-  /** Play counter (raw JSON, pending a typed model). */
-  playCounter?: JSONValue;
-  /** Absence info (raw JSON, pending a typed model). */
-  playlistAbsence?: JSONValue;
+  /** "Made for" personalization. */
+  madeFor?: MadeFor;
+  /** Play counter. */
+  playCounter?: PlayCounter;
+  /** Absence info. */
+  playlistAbsence?: PlaylistAbsence;
   /** Owner uid. */
   uid?: number;
   /** Playlist kind (id within the owner's playlists). */
@@ -74,18 +78,18 @@ export class Playlist extends YandexMusicModel {
   image?: string;
   /** Cover without overlaid text. */
   coverWithoutText?: Cover;
-  /** Contest info (raw JSON, pending a typed model). */
-  contest?: JSONValue;
+  /** Contest info. */
+  contest?: Contest;
   /** Background color. */
   backgroundColor?: string;
   /** Text color. */
   textColor?: string;
   /** Origin id used in `from` parameters. */
   idForFrom?: string;
-  /** Open Graph data (raw JSON, pending a typed model). */
-  ogData?: JSONValue;
-  /** Branding (raw JSON, pending a typed model). */
-  branding?: JSONValue;
+  /** Open Graph data. */
+  ogData?: OpenGraphData;
+  /** Branding. */
+  branding?: Brand;
   /** Metrika id. */
   metrikaId?: number;
   /** Co-author uids. */
@@ -118,14 +122,14 @@ export class Playlist extends YandexMusicModel {
   type?: string;
   /** Whether generation finished. */
   ready?: boolean;
-  /** Custom wave config (raw JSON, pending a typed model). */
-  customWave?: JSONValue;
+  /** Custom wave config. */
+  customWave?: CustomWave;
   /** Pagination metadata for the track list. */
   pager?: Pager;
   /** Whether a trailer exists. */
   hasTrailer?: boolean;
-  /** Trailer availability (raw JSON, pending a typed model). */
-  trailer?: JSONValue;
+  /** Trailer availability. */
+  trailer?: PlaylistAvailability;
   /** Background video URL. */
   backgroundVideoUrl?: string;
   /** Background video id. */
@@ -140,9 +144,6 @@ export class Playlist extends YandexMusicModel {
     }
     const model = new Playlist(client);
     assign(model, raw, [
-      'madeFor',
-      'playCounter',
-      'playlistAbsence',
       'uid',
       'kind',
       'title',
@@ -163,12 +164,9 @@ export class Playlist extends YandexMusicModel {
       'ogTitle',
       'ogDescription',
       'image',
-      'contest',
       'backgroundColor',
       'textColor',
       'idForFrom',
-      'ogData',
-      'branding',
       'metrikaId',
       'coauthors',
       'likesCount',
@@ -180,9 +178,7 @@ export class Playlist extends YandexMusicModel {
       'playlistUuid',
       'type',
       'ready',
-      'customWave',
       'hasTrailer',
-      'trailer',
       'backgroundVideoUrl',
       'backgroundVideoId',
       'backgroundImageUrl',
@@ -190,6 +186,14 @@ export class Playlist extends YandexMusicModel {
     model.owner = User.deJson(raw['owner'], client) ?? undefined;
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
     model.coverWithoutText = Cover.deJson(raw['coverWithoutText'], client) ?? undefined;
+    model.madeFor = MadeFor.deJson(raw['madeFor'], client) ?? undefined;
+    model.playCounter = PlayCounter.deJson(raw['playCounter'], client) ?? undefined;
+    model.playlistAbsence = PlaylistAbsence.deJson(raw['playlistAbsence'], client) ?? undefined;
+    model.contest = Contest.deJson(raw['contest'], client) ?? undefined;
+    model.ogData = OpenGraphData.deJson(raw['ogData'], client) ?? undefined;
+    model.branding = Brand.deJson(raw['branding'], client) ?? undefined;
+    model.customWave = CustomWave.deJson(raw['customWave'], client) ?? undefined;
+    model.trailer = PlaylistAvailability.deJson(raw['trailer'], client) ?? undefined;
     model.pager = Pager.deJson(raw['pager'], client) ?? undefined;
     model.topArtist = deList(Artist.deJson, raw['topArtist'], client);
     model.recentTracks = deList(TrackId.deJson, raw['recentTracks'], client);

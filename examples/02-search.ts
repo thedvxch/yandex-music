@@ -21,7 +21,10 @@ if (!result) {
 }
 
 // The "best" match is a single typed entity (Track | Artist | Album | …).
-console.log('Best match:', result.best?.type, '→', JSON.stringify(result.best?.result).slice(0, 80));
+// Models hold a back-reference to the client, so read fields rather than
+// JSON.stringify the whole object.
+const best = result.best?.result as { title?: string; name?: string } | undefined;
+console.log('Best match:', result.best?.type, '→', best?.title ?? best?.name ?? '(unknown)');
 
 // Each block is paginated and strongly typed.
 for (const track of result.tracks?.results?.slice(0, 5) ?? []) {

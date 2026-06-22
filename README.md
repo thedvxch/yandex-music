@@ -1,5 +1,7 @@
 # @dvxch/yandex-music
 
+[🇷🇺 Документация на русском](./README.ru.md)
+
 A typed, async **TypeScript client for the Yandex Music API**.
 
 `@dvxch/yandex-music` is an independent, from-scratch TypeScript implementation of
@@ -13,6 +15,12 @@ runtime dependencies** (it uses the built-in `fetch`).
 > / `metatags` / `pins` / `presaves` / `concerts` — is implemented and tested,
 > including playlist mutations, dislikes and rotor feedback, plus a realtime
 > ("now playing") API over Ynison.
+
+Every endpoint has been exercised against the live Yandex Music API with a real
+token; the few endpoints the server no longer fulfils for a regular account
+(e.g. legacy queue creation, rotor feedback) behave identically to the reference
+`yandex-music` Python library and surface a typed error rather than failing
+silently.
 
 ## Install
 
@@ -62,9 +70,9 @@ console.log(await lyrics?.fetchLyrics());
 
 | Domain      | Methods |
 | ----------- | ------- |
-| account     | `init`, `accountStatus` |
-| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer` |
-| albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer` |
+| account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `usersSettings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
+| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `tracksCredits`, `tracksDisclaimer`, `playAudio`, `afterTrack` |
+| albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer`, `albumsDisclaimer` |
 | artists     | `artists`, `artistsBriefInfo`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
 | likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists; `usersDislikesTracks`/`Artists` + add/remove |
@@ -99,10 +107,14 @@ rt.on('playStateChange', (paused) => console.log(paused ? 'paused' : 'playing'))
 await rt.start();   // resolves when you call rt.stop()
 ```
 
-## Roadmap
+## Examples
 
-- typed variants for the few remaining free-form payloads (landing block
-  entities, playlist promo sub-objects)
+Runnable examples live in [`examples/`](./examples):
+
+- `01-quickstart.ts` — a track, its direct link and lyrics;
+- `02-search.ts` — search and suggestions;
+- `03-device-auth.ts` — obtaining a token via the device flow;
+- `04-realtime.ts` — following "now playing" over Ynison.
 
 ## Development
 

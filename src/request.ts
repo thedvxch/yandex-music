@@ -28,6 +28,13 @@ export const USER_AGENT = 'Yandex-Music-API';
 /** Default per-request timeout in milliseconds. */
 export const DEFAULT_TIMEOUT_MS = 5000;
 
+/**
+ * Default timeout for raw downloads ({@link Request.retrieve} / {@link Request.download}).
+ * Audio files (especially lossless) far outlast the JSON timeout, so they get a
+ * much larger budget.
+ */
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 300_000;
+
 /** Headers sent with every request unless overridden. */
 export const BASE_HEADERS: Readonly<Record<string, string>> = {
   'X-Yandex-Music-Client': 'YandexMusicAndroid/24023621',
@@ -141,8 +148,15 @@ export class Request {
    * @throws {YandexMusicError} On any transport or API error.
    */
   async post(url: string, data?: Params | string, timeout?: number): Promise<JSONValue | undefined> {
-    const body = typeof data === 'string' ? data : this.encodeForm(data);
-    const bytes = await this.requestWrapper('POST', url, { body, form: true }, timeout);
+    // A pre-serialized string body is JSON (e.g. queue payloads); object bodies
+    // are form-encoded. Tagging a JSON string as form-urlencoded makes some
+    // endpoints (notably `/queues`) drop the connection, so pick the matching
+    // `Content-Type` per body kind.
+    const init =
+      typeof data === 'string'
+        ? { body: data, json: true }
+        : { body: this.encodeForm(data), form: true };
+    const bytes = await this.requestWrapper('POST', url, init, timeout);
     return this.unwrap(bytes);
   }
 
@@ -198,7 +212,7 @@ export class Request {
    * @returns The raw response body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async retrieve(url: string, timeout?: number): Promise<Uint8Array> {
+  async retrieve(url: string, timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS): Promise<Uint8Array> {
     return this.requestWrapper('GET', url, undefined, timeout);
   }
 
@@ -210,7 +224,7 @@ export class Request {
    * @param timeout - Optional per-call timeout override (milliseconds).
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async download(url: string, filename: string, timeout?: number): Promise<void> {
+  async download(url: string, filename: string, timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS): Promise<void> {
     const bytes = await this.retrieve(url, timeout);
     await writeFile(filename, bytes);
   }
@@ -288,7 +302,7 @@ export class Request {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new TimedOutError();
       }
-      throw new NetworkError(error instanceof Error ? error.message : String(error));
+      throw new NetworkError(error instanceof Error ? error.message : String(error), { cause: error });
     } finally {
       clearTimeout(timer);
     }
@@ -310,9 +324,18 @@ export class Request {
     }
 
     if (isJsonObject(data)) {
-      const hasResult = data['result'] !== undefined && data['result'] !== null;
+      // The API wraps payloads in `{ result, invocationInfo }`. Detect the
+      // envelope by key presence so a legitimate `result: null` is preserved
+      // (and unwrapped responses, e.g. OAuth, pass through as-is).
+      if ('result' in data) {
+        return {
+          result: data['result'] ?? null,
+          error: data['error'] ?? undefined,
+          errorDescription: data['errorDescription'] ?? undefined,
+        };
+      }
       return {
-        result: hasResult ? data['result']! : data,
+        result: data,
         error: data['error'] ?? undefined,
         errorDescription: data['errorDescription'] ?? undefined,
       };
@@ -327,15 +350,42 @@ export class Request {
     return this.parseBody(bytes).result;
   }
 
+  /**
+   * Pull a human-readable error out of an error response body.
+   *
+   * The API reports failures in several shapes: a top-level
+   * `{ error, errorDescription }` (OAuth/legacy), a top-level `{ name, message }`,
+   * or — for newer services such as `/queues` — the same `{ name, message }`
+   * nested under `result`. All are coalesced into a single `name: message` string.
+   */
+  private extractErrorMessage(content: Uint8Array): string {
+    const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(content)) as JSONValue;
+    if (!isJsonObject(data)) {
+      return '';
+    }
+    const pick = (obj: JSONValue | undefined): { name: string; message: string } | undefined => {
+      if (!isJsonObject(obj)) {
+        return undefined;
+      }
+      const name = typeof obj['name'] === 'string' ? obj['name'] : '';
+      const message = typeof obj['message'] === 'string' ? obj['message'] : '';
+      return name || message ? { name, message } : undefined;
+    };
+    // Priority: nested `result` error → top-level `{name,message}` → `error` object.
+    const found = pick(data['result']) ?? pick(data) ?? pick(data['error']);
+    if (found) {
+      return [found.name, found.message].filter(Boolean).join(': ');
+    }
+    // Legacy `{ error, errorDescription }` (strings).
+    const error = typeof data['error'] === 'string' ? data['error'] : '';
+    const description = typeof data['errorDescription'] === 'string' ? data['errorDescription'] : '';
+    return [error, description].filter(Boolean).join(' ').trim();
+  }
+
   private handleErrorResponse(status: number, content: Uint8Array): never {
-    let message = 'Unknown error';
+    let message: string;
     try {
-      const envelope = this.parseBody(content);
-      const error = envelope.error ?? '';
-      const description = envelope.errorDescription ?? '';
-      message = `${typeof error === 'string' ? error : JSON.stringify(error)} ${
-        typeof description === 'string' ? description : JSON.stringify(description)
-      }`.trim();
+      message = this.extractErrorMessage(content) || `HTTP ${status}`;
     } catch {
       message = 'Unknown HTTPError';
     }

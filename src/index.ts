@@ -107,6 +107,17 @@ export { AlbumTrailer, AlbumSimilarEntities } from './models/album/albumExtras.j
 export { Playlist } from './models/playlist/playlist.js';
 export { PlaylistId } from './models/playlist/playlistId.js';
 export {
+  MadeFor,
+  CaseForms,
+  PlayCounter,
+  PlaylistAbsence,
+  OpenGraphData,
+  Brand,
+  CustomWave,
+  Contest,
+  PlaylistAvailability,
+} from './models/playlist/promo.js';
+export {
   PlaylistRecommendations,
   PlaylistSimilarEntities,
   PlaylistsList,
@@ -134,6 +145,8 @@ export type { PlayAudioOptions } from './methods/tracks.js';
 
 // Models — landing
 export { Landing, Block, BlockEntity, LandingList, ChartInfo, Chart, ChartItem } from './models/landing/landing.js';
+export type { BlockEntityData } from './models/landing/landing.js';
+export { Promotion, PlayContext, MixLink, TrackShortOld } from './models/landing/entities.js';
 export { Genre } from './models/genre.js';
 
 // Models — rotor (radio)

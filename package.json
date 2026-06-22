@@ -11,6 +11,14 @@
     "typescript"
   ],
   "license": "LGPL-3.0-or-later",
+  "homepage": "https://github.com/thedvxch/yandex-music#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thedvxch/yandex-music.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thedvxch/yandex-music/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "publishConfig": {
@@ -31,7 +39,8 @@
   "files": [
     "dist",
     "src",
-    "README.md"
+    "README.md",
+    "README.ru.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

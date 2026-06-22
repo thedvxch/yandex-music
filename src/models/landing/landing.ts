@@ -2,10 +2,10 @@
  * Landing-page models.
  *
  * @remarks
- * The landing blocks carry heterogeneous payloads. The strongly-typed entry
- * points ({@link Landing}, {@link ChartInfo}, {@link LandingList}) are modeled
- * here; the polymorphic `data` of a {@link BlockEntity} and a few menu/promo
- * sub-objects are exposed as raw JSON for now.
+ * The landing blocks carry heterogeneous payloads. The polymorphic `data` of a
+ * {@link BlockEntity} is deserialized into the matching model based on its
+ * `type` (see {@link BlockEntityData}); a few block-level menu sub-objects remain
+ * raw JSON.
  *
  * @packageDocumentation
  */
@@ -13,17 +13,40 @@ import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
 import { Track } from '../track/track.js';
 import { TrackId } from '../trackShort.js';
 import { Playlist } from '../playlist/playlist.js';
+import { Album } from '../album/album.js';
+import { GeneratedPlaylist } from '../playlist/playlistExtras.js';
+import { Promotion, PlayContext, MixLink } from './entities.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
+
+/** The possible shapes of a {@link BlockEntity}'s `data`, keyed by entity type. */
+export type BlockEntityData =
+  | GeneratedPlaylist
+  | Promotion
+  | Album
+  | Playlist
+  | ChartItem
+  | PlayContext
+  | MixLink
+  | JSONValue;
 
 /** A single item inside a landing block (album, playlist, promotion, …). */
 export class BlockEntity extends YandexMusicModel {
   /** Entity id. */
   id?: string;
-  /** Entity type (drives the shape of `data`). */
+  /**
+   * Entity type, which drives the shape of {@link data}.
+   *
+   * @remarks
+   * Known values: `personal-playlist`, `promotion`, `album`, `playlist`,
+   * `chart-item`, `play-context`, `mix-link`.
+   */
   type?: string;
-  /** The polymorphic entity payload (raw JSON, pending typed variants). */
-  data?: JSONValue;
+  /**
+   * The polymorphic entity payload, deserialized according to {@link type}.
+   * Unknown types fall back to the raw JSON value.
+   */
+  data?: BlockEntityData;
 
   /** @see {@link BlockEntity} */
   static deJson(raw: JSONValue | undefined, client?: Client): BlockEntity | null {
@@ -31,7 +54,33 @@ export class BlockEntity extends YandexMusicModel {
       return null;
     }
     const model = new BlockEntity(client);
-    assign(model, raw, ['id', 'type', 'data']);
+    assign(model, raw, ['id', 'type']);
+    const data = raw['data'];
+    switch (model.type) {
+      case 'personal-playlist':
+        model.data = GeneratedPlaylist.deJson(data, client) ?? undefined;
+        break;
+      case 'promotion':
+        model.data = Promotion.deJson(data, client) ?? undefined;
+        break;
+      case 'album':
+        model.data = Album.deJson(data, client) ?? undefined;
+        break;
+      case 'playlist':
+        model.data = Playlist.deJson(data, client) ?? undefined;
+        break;
+      case 'chart-item':
+        model.data = ChartItem.deJson(data, client) ?? undefined;
+        break;
+      case 'play-context':
+        model.data = PlayContext.deJson(data, client) ?? undefined;
+        break;
+      case 'mix-link':
+        model.data = MixLink.deJson(data, client) ?? undefined;
+        break;
+      default:
+        model.data = data;
+    }
     return model;
   }
 }
