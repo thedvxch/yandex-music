@@ -11,7 +11,7 @@ import { Fade, LyricsInfo, Major, MetaData, Normalization, PoetryLoverMatch, Sma
 // ES module evaluation order is safe.
 import { Artist } from '../artist/artist.js';
 import { Album } from '../album/album.js';
-import type { DownloadInfo, SimilarTracks, TrackFullInfo, TrackLyrics } from './extras.js';
+import type { DownloadInfo, LosslessDownloadInfo, SimilarTracks, TrackFullInfo, TrackLyrics } from './extras.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -205,6 +205,17 @@ export class Track extends YandexMusicModel {
    */
   getDownloadInfo(): Promise<DownloadInfo[]> {
     return this.requireClient().tracksDownloadInfo(this.trackId());
+  }
+
+  /**
+   * Fetch lossless (FLAC) download info for this track via `/get-file-info`.
+   *
+   * @param quality - Requested quality. Defaults to `lossless`.
+   * @returns The file info, or `null`. See {@link LosslessDownloadInfo}.
+   * @throws {YandexMusicError} On any transport or API error.
+   */
+  getLosslessInfo(quality = 'lossless'): Promise<LosslessDownloadInfo | null> {
+    return this.requireClient().tracksLosslessInfo(this.trackId(), quality);
   }
 
   /**

@@ -6,10 +6,23 @@
 import { ClientBase } from '../clientBase.js';
 import { isJsonObject } from '../base.js';
 import { Track } from '../models/track/track.js';
-import { DownloadInfo, SimilarTracks, TrackFullInfo, TrackLyrics, TrackTrailer } from '../models/track/extras.js';
+import {
+  DownloadInfo,
+  LosslessDownloadInfo,
+  SimilarTracks,
+  TrackFullInfo,
+  TrackLyrics,
+  TrackTrailer,
+} from '../models/track/extras.js';
 import { Supplement } from '../models/supplement.js';
 import { ShotEvent } from '../models/shot.js';
-import { getSignRequest } from '../signRequest.js';
+import {
+  getSignRequest,
+  getFileInfoSign,
+  convertTrackIdToNumber,
+  FILE_INFO_CODECS,
+  FILE_INFO_TRANSPORT,
+} from '../signRequest.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -77,6 +90,41 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
       const url = `${this.baseUrl}/tracks/${trackId}/download-info`;
       const result = await this.request.get(url);
       return DownloadInfo.deListAsync(result, this as unknown as Client, getDirectLinks);
+    }
+
+    /**
+     * Fetch lossless (FLAC) download info for a track via the `/get-file-info`
+     * endpoint.
+     *
+     * @remarks
+     * Unlike {@link tracksDownloadInfo} (legacy lossy mp3/aac), this resolves the
+     * modern signed endpoint that can serve **lossless FLAC**. The returned stream
+     * is AES-CTR-encrypted (`transport: encraw`); {@link LosslessDownloadInfo.download}
+     * / {@link LosslessDownloadInfo.downloadBytes} decrypt it transparently. When a
+     * track has no lossless source the server falls back to a lossy codec — check
+     * {@link LosslessDownloadInfo.isLossless} / `.codec`.
+     *
+     * @param trackId - The track id (numeric, or `"id:albumId"`).
+     * @param quality - Requested quality. Defaults to `lossless`.
+     * @returns The file info, or `null` when the endpoint returns none.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async tracksLosslessInfo(
+      trackId: string | number,
+      quality = 'lossless',
+    ): Promise<LosslessDownloadInfo | null> {
+      const id = convertTrackIdToNumber(trackId);
+      const sign = getFileInfoSign(id, quality);
+      const result = await this.request.get(`${this.baseUrl}/get-file-info`, {
+        ts: sign.ts,
+        trackId: id,
+        quality,
+        codecs: FILE_INFO_CODECS,
+        transports: FILE_INFO_TRANSPORT,
+        sign: sign.value,
+      });
+      const info = isJsonObject(result) ? result['downloadInfo'] : undefined;
+      return LosslessDownloadInfo.deJson(info, this as unknown as Client);
     }
 
     /**

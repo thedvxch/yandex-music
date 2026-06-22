@@ -15,8 +15,15 @@ export { Request, USER_AGENT, DEFAULT_TIMEOUT_MS, BASE_HEADERS } from './request
 export type { Params, ParamValue, RequestInit, FetchLike, ResponseLike } from './request.js';
 
 // Signing
-export { getSignRequest, convertTrackIdToNumber, DEFAULT_SIGN_KEY } from './signRequest.js';
-export type { Sign } from './signRequest.js';
+export {
+  getSignRequest,
+  getFileInfoSign,
+  convertTrackIdToNumber,
+  DEFAULT_SIGN_KEY,
+  FILE_INFO_CODECS,
+  FILE_INFO_TRANSPORT,
+} from './signRequest.js';
+export type { Sign, FileInfoSign } from './signRequest.js';
 
 // Base model machinery
 export { YandexMusicModel, deList, isJsonObject, assign } from './base.js';
@@ -53,7 +60,7 @@ export {
   R128,
   LyricsMajor,
 } from './models/track/nested.js';
-export { DownloadInfo, TrackLyrics, SimilarTracks, TrackFullInfo, TrackTrailer } from './models/track/extras.js';
+export { DownloadInfo, LosslessDownloadInfo, TrackLyrics, SimilarTracks, TrackFullInfo, TrackTrailer } from './models/track/extras.js';
 
 // Models — artist
 export { Artist, Counts, Ratings, Description } from './models/artist/artist.js';

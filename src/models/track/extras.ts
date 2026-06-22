@@ -3,7 +3,8 @@
  *
  * @packageDocumentation
  */
-import { createHash } from 'node:crypto';
+import { createHash, createDecipheriv } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
 import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
 import { LyricsMajor } from './nested.js';
 import { Track } from './track.js';
@@ -117,6 +118,125 @@ export class DownloadInfo extends YandexMusicModel {
   async download(filename: string): Promise<void> {
     const link = this.directLink ?? (await this.getDirectLink());
     await this.requireClient().request.download(link, filename);
+  }
+}
+
+/**
+ * Decrypt an `encraw` (AES-CTR) stream with a hex key.
+ *
+ * The IV is 16 zero bytes (12-byte zero nonce + zero counter); the key length
+ * selects AES-128 vs AES-256.
+ */
+function decryptEncraw(data: Uint8Array, keyHex: string): Uint8Array {
+  const key = Buffer.from(keyHex, 'hex');
+  const iv = Buffer.alloc(16);
+  const algo = key.length === 32 ? 'aes-256-ctr' : 'aes-128-ctr';
+  const decipher = createDecipheriv(algo, key, iv);
+  return new Uint8Array(Buffer.concat([decipher.update(data), decipher.final()]));
+}
+
+/**
+ * Lossless (and other modern) download info from `/get-file-info`.
+ *
+ * @remarks
+ * With `transport: 'encraw'` the URLs serve an **AES-CTR-encrypted** stream and
+ * {@link LosslessDownloadInfo.key} holds the hex decryption key;
+ * {@link LosslessDownloadInfo.downloadBytes} fetches and decrypts it for you. The
+ * endpoint falls back to a lossy codec when a track has no lossless source, so
+ * check {@link LosslessDownloadInfo.codec} / {@link LosslessDownloadInfo.isLossless}.
+ */
+export class LosslessDownloadInfo extends YandexMusicModel {
+  /** Track id this info belongs to. */
+  trackId?: string;
+  /** Requested/granted quality (for example `lossless`). */
+  quality?: string;
+  /** Actual codec served (`flac`, `flac-mp4`, `aac`, `mp3`, …). */
+  codec?: string;
+  /** Bitrate in kbit/s. */
+  bitrate?: number;
+  /** Transport, typically `encraw` (AES-CTR-encrypted raw stream). */
+  transport?: string;
+  /** Hex AES-CTR key used to decrypt an `encraw` stream, when encrypted. */
+  key?: string;
+  /** Candidate stream URLs (any one works). */
+  urls?: string[];
+  /** Single stream URL (older response shape). */
+  url?: string;
+  /** File size in bytes, when known. */
+  size?: number;
+
+  /** @see {@link LosslessDownloadInfo} */
+  static deJson(raw: JSONValue | undefined, client?: Client): LosslessDownloadInfo | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new LosslessDownloadInfo(client);
+    assign(model, raw, ['trackId', 'quality', 'codec', 'bitrate', 'transport', 'key', 'urls', 'url', 'size']);
+    return model;
+  }
+
+  /** Whether this is a true lossless (FLAC) variant. */
+  get isLossless(): boolean {
+    return this.codec === 'flac' || this.codec === 'flac-mp4';
+  }
+
+  /** Every candidate stream URL, in preference order (`urls` then `url`). */
+  links(): string[] {
+    const all = [...(this.urls ?? []), this.url].filter((u): u is string => Boolean(u));
+    return [...new Set(all)];
+  }
+
+  /**
+   * Pick a stream URL.
+   *
+   * @returns The first candidate stream URL (the bytes may be encrypted — see {@link key}).
+   * @throws When no URL is present.
+   */
+  getDirectLink(): string {
+    const link = this.links()[0];
+    if (!link) {
+      throw new Error('LosslessDownloadInfo has no stream URL.');
+    }
+    return link;
+  }
+
+  /**
+   * Download the audio as bytes, transparently AES-CTR-decrypting an `encraw`
+   * stream when {@link key} is present.
+   *
+   * `/get-file-info` returns several mirror URLs on different CDN hosts; this
+   * tries each in order so a single flaky host doesn't fail the download.
+   *
+   * @returns The decoded audio file contents.
+   * @throws {YandexMusicError} On any transport or API error (the last one, after
+   *   every candidate URL fails).
+   */
+  async downloadBytes(): Promise<Uint8Array> {
+    const links = this.links();
+    if (links.length === 0) {
+      throw new Error('LosslessDownloadInfo has no stream URL.');
+    }
+    const request = this.requireClient().request;
+    let lastError: unknown;
+    for (const link of links) {
+      try {
+        const bytes = await request.retrieve(link);
+        return this.key ? decryptEncraw(bytes, this.key) : bytes;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * Download the audio straight to a file on disk (decrypting if needed).
+   *
+   * @param filename - Destination path, including extension.
+   * @throws {YandexMusicError} On any transport or API error.
+   */
+  async download(filename: string): Promise<void> {
+    await writeFile(filename, await this.downloadBytes());
   }
 }
 

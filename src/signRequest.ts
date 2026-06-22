@@ -51,3 +51,47 @@ export function getSignRequest(trackId: string | number, key: string = DEFAULT_S
 
   return { timestamp, value };
 }
+
+/** Codecs requested from `/get-file-info`, in the order the Android client sends them. */
+export const FILE_INFO_CODECS = 'flac,flac-mp4,mp3,aac,he-aac,aac-mp4,he-aac-mp4';
+
+/** Transport requested from `/get-file-info`. `encraw` returns an AES-CTR-encrypted stream. */
+export const FILE_INFO_TRANSPORT = 'encraw';
+
+/** A computed `/get-file-info` signature. */
+export interface FileInfoSign {
+  /** Unix timestamp (seconds) the signature was created at. */
+  ts: number;
+  /** Base64-encoded HMAC-SHA256 signature value (last character dropped). */
+  value: string;
+}
+
+/**
+ * Create the signature for a `/get-file-info` (lossless download) request.
+ *
+ * The signature is `HMAC-SHA256(key, "{ts}{trackId}{quality}{codecs}{transport}")`
+ * with commas stripped, Base64-encoded, with the trailing character removed —
+ * matching the Android client. The same `codecs`/`transport` strings must be sent
+ * in the query for the signature to validate.
+ *
+ * @param trackId - The track the request is scoped to.
+ * @param quality - Requested quality (for example `lossless`). Defaults to `lossless`.
+ * @param codecs - Requested codecs string. Defaults to {@link FILE_INFO_CODECS}.
+ * @param transport - Requested transport string. Defaults to {@link FILE_INFO_TRANSPORT}.
+ * @param key - The signing key. Defaults to {@link DEFAULT_SIGN_KEY}.
+ * @returns The timestamp/value pair to send alongside the request.
+ */
+export function getFileInfoSign(
+  trackId: string | number,
+  quality = 'lossless',
+  codecs: string = FILE_INFO_CODECS,
+  transport: string = FILE_INFO_TRANSPORT,
+  key: string = DEFAULT_SIGN_KEY,
+): FileInfoSign {
+  const numericId = convertTrackIdToNumber(trackId);
+  const ts = Math.floor(Date.now() / 1000);
+  const message = `${ts}${numericId}${quality}${codecs}${transport}`.replace(/,/g, '');
+  const value = createHmac('sha256', key).update(message, 'utf8').digest('base64').slice(0, -1);
+
+  return { ts, value };
+}
