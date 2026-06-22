@@ -1,5 +1,5 @@
 {
-  "name": "yamuse",
+  "name": "@dvxch/yandex-music",
   "version": "0.1.0",
   "description": "Typed, async TypeScript client for the Yandex Music API",
   "keywords": [
@@ -12,6 +12,10 @@
   ],
   "license": "LGPL-3.0-or-later",
   "type": "module",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },

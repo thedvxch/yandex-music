@@ -4,9 +4,13 @@ import {
   Album,
   Artist,
   Best,
+  BriefInfo,
   Client,
   Dashboard,
   DeviceCode,
+  Difference,
+  GeneratedPlaylist,
+  PlaylistId,
   Genre,
   Landing,
   MusicHistory,
@@ -246,6 +250,45 @@ test('MusicHistory.deJson exposes the tab → group → item path', () => {
   assert.equal(trackId, '42');
 });
 
+test('BriefInfo.deJson maps the artist aggregate', () => {
+  const info = BriefInfo.deJson({
+    artist: { id: 1, name: 'A' },
+    albums: [{ id: 9, title: 'Album' }],
+    similarArtists: [{ id: 2, name: 'B' }],
+    popularTracks: [{ id: '1', title: 'T' }],
+    playlistIds: [{ uid: 5, kind: 3 }],
+    stats: { lastMonthListeners: 1000, lastMonthListenersDelta: 50 },
+    hasPromotions: false,
+  });
+  assert.ok(info);
+  assert.equal(info.artist?.name, 'A');
+  assert.equal(info.albums?.[0]?.title, 'Album');
+  assert.equal(info.similarArtists?.[0]?.name, 'B');
+  assert.ok(info.playlistIds?.[0] instanceof PlaylistId);
+  assert.equal(info.playlistIds?.[0]?.playlistId, '5:3');
+  assert.equal(info.stats?.lastMonthListeners, 1000);
+});
+
+test('GeneratedPlaylist.deJson nests the underlying playlist', () => {
+  const gen = GeneratedPlaylist.deJson({
+    type: 'playlistOfTheDay',
+    ready: true,
+    notify: false,
+    data: { kind: 1, title: 'Daily' },
+  });
+  assert.ok(gen);
+  assert.equal(gen.type, 'playlistOfTheDay');
+  assert.equal(gen.data?.title, 'Daily');
+});
+
+test('Difference serializes insert and delete operations', () => {
+  const insert = new Difference().addInsert(0, { id: '42', albumId: '9' }).toJson();
+  assert.deepEqual(JSON.parse(insert), [{ op: 'insert', at: 0, tracks: [{ id: '42', albumId: '9' }] }]);
+
+  const del = new Difference().addDelete(1, 3).toJson();
+  assert.deepEqual(JSON.parse(del), [{ op: 'delete', from: 1, to: 3 }]);
+});
+
 test('client exposes the new method surface', () => {
   const client = new Client({ token: 'x' });
   for (const method of [
@@ -255,7 +298,16 @@ test('client exposes the new method surface', () => {
     'usersLikesTracksAdd',
     'usersLikesTracks',
     'usersPlaylists',
+    'usersPlaylistsCreate',
+    'usersPlaylistsDelete',
+    'usersPlaylistsInsertTrack',
+    'usersPlaylistsDeleteTrack',
+    'playlistsPersonal',
     'playlist',
+    'artistsBriefInfo',
+    'artistsDirectAlbums',
+    'artistsSimilar',
+    'artistsTrackIds',
     'requestDeviceCode',
     'deviceAuth',
     'landing',
@@ -263,6 +315,8 @@ test('client exposes the new method surface', () => {
     'genres',
     'rotorStationsDashboard',
     'rotorStationTracks',
+    'rotorStationFeedbackTrackStarted',
+    'rotorStationSettings2',
     'queuesList',
     'queue',
     'queueUpdatePosition',

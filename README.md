@@ -1,28 +1,28 @@
-# yamuse
+# @dvxch/yandex-music
 
 A typed, async **TypeScript client for the Yandex Music API**.
 
-`yamuse` is an independent, from-scratch TypeScript implementation of the Yandex
-Music HTTP API — not a transpile of any existing library. It targets modern
-Node.js (≥ 20), ships ESM with full type declarations, and has **zero runtime
-dependencies** (it uses the built-in `fetch`).
+`@dvxch/yandex-music` is an independent, from-scratch TypeScript implementation of
+the Yandex Music HTTP API — not a transpile of any existing library. It targets
+modern Node.js (≥ 20), ships ESM with full type declarations, and has **zero
+runtime dependencies** (it uses the built-in `fetch`).
 
 > Status: growing. Twelve domains — `account` / `tracks` / `albums` / `artists` /
-> `search` / `likes` / `playlists` (read) / `device auth` / `landing` / `radio` /
-> `queue` / `history` — are implemented and tested. The rest (ynison remote
-> control, playlist mutations, …) are being added incrementally — see
-> [Roadmap](#roadmap).
+> `search` / `likes` / `playlists` / `device auth` / `landing` / `radio` /
+> `queue` / `history` — are implemented and tested, including playlist mutations,
+> dislikes and rotor feedback. The rest (ynison remote control, small domains)
+> are being added incrementally — see [Roadmap](#roadmap).
 
 ## Install
 
 ```bash
-npm install yamuse
+npm install @dvxch/yandex-music
 ```
 
 ## Quick start
 
 ```ts
-import { Client } from 'yamuse';
+import { Client } from '@dvxch/yandex-music';
 
 // Construct with an OAuth token, then init() once to load account info.
 const client = await new Client({ token: process.env.YM_TOKEN }).init();
@@ -63,23 +63,22 @@ console.log(await lyrics?.fetchLyrics());
 | ----------- | ------- |
 | account     | `init`, `accountStatus` |
 | tracks      | `tracks`, `tracksDownloadInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer` |
-| albums      | `albums`, `albumsWithTracks` |
-| artists     | `artists`, `artistsTracks` |
+| albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer` |
+| artists     | `artists`, `artistsBriefInfo`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
-| likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists |
-| playlists   | `playlist`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds` |
+| likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists; `usersDislikesTracks`/`Artists` + add/remove |
+| playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow) |
 | landing     | `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
-| radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus` |
+| radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`radioStarted`/`trackStarted`/`trackFinished`/`skip` shortcuts), `rotorStationSettings2` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition` |
 | history     | `musicHistory` |
 
 ## Roadmap
 
-- ynison remote control (a dedicated WebSocket module, separate from this HTTP client)
+- ynison remote control (a dedicated WebSocket module, separate from this HTTP
+  client) — wrapped in a friendly real-time event API
 - `feed`, `musicHistoryItems`, `queueCreate`
-- playlist mutations (create / rename / change / insert-track), dislikes,
-  rotor feedback
 - clips, concerts, credits, disclaimers, labels, metatags, pins, presaves
 - typed sub-models: `Status` (permissions/subscription/plus), block-entity
   variants, station settings/restrictions

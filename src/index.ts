@@ -58,6 +58,17 @@ export { DownloadInfo, TrackLyrics, SimilarTracks, TrackFullInfo, TrackTrailer }
 // Models — artist
 export { Artist, Counts, Ratings, Description } from './models/artist/artist.js';
 export { ArtistTracks } from './models/artist/artistTracks.js';
+export {
+  ArtistLink,
+  ArtistLinks,
+  ArtistAlbums,
+  ArtistSimilar,
+  ArtistTrailer,
+  BriefInfo,
+} from './models/artist/artistExtras.js';
+export { Stats } from './models/artist/stats.js';
+export { Vinyl } from './models/artist/vinyl.js';
+export type { ArtistAlbumsSortBy, SortOrder } from './methods/artists.js';
 
 // Models — album
 export { Album, Label, TrackPosition, Deprecation, AlbumActionButton } from './models/album/album.js';
@@ -81,6 +92,17 @@ export { AlbumTrailer, AlbumSimilarEntities } from './models/album/albumExtras.j
 
 // Models — playlist / user / video / track refs
 export { Playlist } from './models/playlist/playlist.js';
+export { PlaylistId } from './models/playlist/playlistId.js';
+export {
+  PlaylistRecommendations,
+  PlaylistSimilarEntities,
+  PlaylistsList,
+  PlaylistTrailer,
+  GeneratedPlaylist,
+} from './models/playlist/playlistExtras.js';
+export type { PlaylistVisibility } from './methods/playlists.js';
+export { Difference } from './utils/difference.js';
+export type { DiffTrack } from './utils/difference.js';
 export { User } from './models/user.js';
 export { Video } from './models/video.js';
 export { TrackShort, TrackId } from './models/trackShort.js';
@@ -103,6 +125,13 @@ export { Genre } from './models/genre.js';
 
 // Models — rotor (radio)
 export { Id, Station, StationResult, Dashboard, Sequence, StationTracksResult } from './models/rotor/rotor.js';
+export type {
+  RotorFeedbackType,
+  RotorMoodEnergy,
+  RotorDiversity,
+  RotorLanguage,
+  RotorStationType,
+} from './methods/radio.js';
 
 // Models — queue
 export { Queue, QueueItem, Context } from './models/queue/queue.js';
