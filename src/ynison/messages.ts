@@ -77,12 +77,12 @@ export function buildUpdateFullStateRequest(
   const info: UpdateFullStateRequest['updateFullState']['device']['info'] = deviceInfo
     ? {
         deviceId,
-        title: deviceInfo.title ?? 'Python SDK',
+        title: deviceInfo.title ?? 'Node.js SDK',
         type: deviceInfo.type,
         appName: deviceInfo.appName,
         ...(deviceInfo.appVersion ? { appVersion: deviceInfo.appVersion } : {}),
       }
-    : { deviceId, title: 'Python SDK', type: 'WEB', appName: 'yandex-music' };
+    : { deviceId, title: 'Node.js SDK', type: 'WEB', appName: 'yandex-music' };
   return {
     updateFullState: {
       playerState: {

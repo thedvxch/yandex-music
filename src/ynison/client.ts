@@ -220,7 +220,7 @@ export class YnisonClient {
       'Ynison-Device-Info': JSON.stringify(
         this.deviceInfo
           ? { app_name: this.deviceInfo.appName, type: this.deviceInfo.headerType }
-          : { app_name: 'Python SDK', type: '1' },
+          : { app_name: 'Node.js SDK', type: '1' },
       ),
     };
     if (this.redirect) {
