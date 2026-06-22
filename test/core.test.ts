@@ -11,6 +11,10 @@ import {
   Metatags,
   Pin,
   Status,
+  RealtimeClient,
+  parseStateFrame,
+  parseRedirectFrame,
+  liveProgressMs,
   Client,
   Dashboard,
   DeviceCode,
@@ -334,6 +338,57 @@ test('Status.deJson types permissions, subscription and plus', () => {
   assert.equal(status.subscription?.autoRenewable?.[0]?.product?.price?.amount, 169);
 });
 
+test('parseStateFrame reads snake_case player state', () => {
+  const state = parseStateFrame(
+    JSON.stringify({
+      player_state: {
+        status: { paused: false, duration_ms: '200000', progress_ms: '5000', playback_speed: 1, version: { timestamp_ms: '1700000000000' } },
+        player_queue: {
+          current_playable_index: 1,
+          entity_id: '5:3',
+          entity_type: 'PLAYLIST',
+          playable_list: [{ playable_id: '10' }, { playable_id: '20' }],
+        },
+      },
+    }),
+  );
+  assert.equal(state.paused, false);
+  assert.equal(state.durationMs, 200000);
+  assert.equal(state.currentPlayableIndex, 1);
+  assert.equal(state.playableList[1]?.playableId, '20');
+  assert.equal(state.entityType, 'PLAYLIST');
+});
+
+test('parseRedirectFrame requires host, ticket and session', () => {
+  const r = parseRedirectFrame(JSON.stringify({ host: 'h', redirect_ticket: 't', session_id: 42 }));
+  assert.equal(r.host, 'h');
+  assert.equal(r.redirectTicket, 't');
+  assert.equal(r.sessionId, '42');
+  assert.throws(() => parseRedirectFrame(JSON.stringify({ host: 'h' })));
+});
+
+test('liveProgressMs extrapolates only while playing', () => {
+  const paused = liveProgressMs({
+    playableList: [], currentPlayableIndex: 0, entityId: null, entityType: null,
+    paused: true, durationMs: 1000, progressMs: 500, playbackSpeed: 1, timestampMs: Date.now() - 10_000,
+  });
+  assert.equal(paused, 500);
+
+  const playing = liveProgressMs({
+    playableList: [], currentPlayableIndex: 0, entityId: null, entityType: null,
+    paused: false, durationMs: 1_000_000, progressMs: 0, playbackSpeed: 1, timestampMs: Date.now() - 1000,
+  });
+  assert.ok(playing >= 900 && playing <= 1100);
+});
+
+test('client.realtime returns an event emitter and validates token', () => {
+  const rt = new Client({ token: 'x' }).realtime();
+  assert.ok(rt instanceof RealtimeClient);
+  assert.equal(typeof rt.on, 'function');
+  assert.equal(rt.isRunning, false);
+  assert.throws(() => new Client().realtime());
+});
+
 test('client exposes the new method surface', () => {
   const client = new Client({ token: 'x' });
   for (const method of [
@@ -384,6 +439,7 @@ test('client exposes the new method surface', () => {
     'concertsFeed',
     'queueCreate',
     'musicHistoryItems',
+    'realtime',
   ]) {
     assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
   }

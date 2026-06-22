@@ -24,6 +24,8 @@ import { QueueMixin } from './methods/queue.js';
 import { RadioMixin } from './methods/radio.js';
 import { SearchMixin } from './methods/search.js';
 import { TracksMixin } from './methods/tracks.js';
+import { RealtimeClient, type RealtimeOptions } from './ynison/realtime.js';
+import { UnauthorizedError } from './exceptions.js';
 
 /**
  * The method groups layered onto {@link ClientBase}. Splitting them into mixins
@@ -91,6 +93,42 @@ export class Client extends ComposedClient {
    */
   constructor(options: ClientOptions = {}) {
     super(options);
+  }
+
+  /**
+   * Create a realtime ("now playing") client backed by Ynison.
+   *
+   * @remarks
+   * Realtime events are the only server-push channel Yandex Music offers — there
+   * are no HTTP webhooks. The returned {@link RealtimeClient} handles the
+   * handshake, keep-alive and reconnection; just subscribe and `start()`. By
+   * default `trackChange` events resolve the playing track via {@link Client.tracks}.
+   *
+   * Requires the optional `ws` package (`npm install ws`).
+   *
+   * @param options - Overrides for token, device identity and reconnection.
+   * @returns A new realtime client.
+   *
+   * @example
+   * ```ts
+   * const rt = client.realtime();
+   * rt.on('trackChange', ({ track }) => console.log('now playing:', track?.title));
+   * await rt.start();
+   * ```
+   */
+  realtime(options: Partial<RealtimeOptions> = {}): RealtimeClient {
+    const token = options.token ?? this.token;
+    if (!token) {
+      throw new UnauthorizedError('a token is required for the realtime API');
+    }
+    return new RealtimeClient({
+      resolveTrack: async (playableId) => {
+        const tracks = await this.tracks([playableId]);
+        return tracks[0] ?? null;
+      },
+      ...options,
+      token,
+    });
   }
 }
 

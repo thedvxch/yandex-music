@@ -52,4 +52,12 @@ export class TimedOutError extends NetworkError {
 export class DeviceAuthError extends YandexMusicError {}
 
 /** Base class for errors related to the Ynison (remote control) protocol. */
-export class YnisonError extends YandexMusicError {}
+export class YnisonError extends YandexMusicError {
+  /** When the server sent a "go away" frame, how long to wait before reconnecting (ms). */
+  readonly retryAfterMs?: number;
+
+  constructor(message?: string, retryAfterMs?: number) {
+    super(message);
+    this.retryAfterMs = retryAfterMs;
+  }
+}

@@ -213,3 +213,16 @@ export {
   MusicHistoryItemId,
 } from './models/musicHistory/musicHistory.js';
 export type { MusicHistoryItemsQuery } from './methods/musicHistory.js';
+
+// Realtime — Ynison (requires the optional `ws` package)
+export { RealtimeClient, liveProgressMs } from './ynison/realtime.js';
+export type { RealtimeOptions, RealtimeEvents, TrackChangeEvent } from './ynison/realtime.js';
+export { YnisonClient, parseStateFrame, parseRedirectFrame } from './ynison/client.js';
+export type { YnisonState, RedirectResponse, StateListener, YnisonClientOptions } from './ynison/client.js';
+export {
+  generateDeviceId,
+  generateRequestId,
+  buildUpdateFullStateRequest,
+  ANDROID_DEVICE_INFO,
+} from './ynison/messages.js';
+export type { DeviceInfoOverride, UpdateFullStateRequest } from './ynison/messages.js';

@@ -15,6 +15,7 @@ flow, which obtains one for you.
 YM_TOKEN=... npx tsx examples/01-quickstart.ts
 YM_TOKEN=... npx tsx examples/02-search.ts "daft punk"
 npx tsx examples/03-device-auth.ts
+YM_TOKEN=... npx tsx examples/04-realtime.ts   # needs: npm install ws
 ```
 
 | File | Shows |
@@ -22,6 +23,4 @@ npx tsx examples/03-device-auth.ts
 | `01-quickstart.ts`  | token init, fetch a track, download it, read lyrics |
 | `02-search.ts`      | catalog search, typed result blocks, suggest/typo-fix |
 | `03-device-auth.ts` | device-code login (no password handling) |
-
-> **Real-time / "now playing"** events (over Ynison) are on the roadmap and not
-> yet implemented — see the project README's Roadmap section.
+| `04-realtime.ts`    | realtime "now playing" events over Ynison |

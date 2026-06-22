@@ -7,12 +7,12 @@ the Yandex Music HTTP API — not a transpile of any existing library. It target
 modern Node.js (≥ 20), ships ESM with full type declarations, and has **zero
 runtime dependencies** (it uses the built-in `fetch`).
 
-> Status: the full HTTP API is covered — `account` / `tracks` / `albums` /
+> Status: complete. The full HTTP API — `account` / `tracks` / `albums` /
 > `artists` / `search` / `likes` / `playlists` / `device auth` / `landing` /
 > `radio` / `queue` / `history` / `clips` / `credits` / `disclaimers` / `labels`
-> / `metatags` / `pins` / `presaves` / `concerts` — all implemented and tested,
-> including playlist mutations, dislikes and rotor feedback. Only ynison
-> real-time remote control remains — see [Roadmap](#roadmap).
+> / `metatags` / `pins` / `presaves` / `concerts` — is implemented and tested,
+> including playlist mutations, dislikes and rotor feedback, plus a realtime
+> ("now playing") API over Ynison.
 
 ## Install
 
@@ -82,13 +82,27 @@ console.log(await lyrics?.fetchLyrics());
 | pins        | `pins`, `pin{Album,Artist,Playlist,Wave}`, `unpin{Album,Artist,Playlist,Wave}` |
 | presaves    | `usersPresaves`, `usersPresavesAdd`, `usersPresavesRemove` |
 | concerts    | `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
+| realtime    | `client.realtime()` → `RealtimeClient` (Ynison; needs `ws`) |
+
+## Realtime ("now playing")
+
+Yandex Music has no HTTP webhooks; the only server-push channel is **Ynison**
+(the WebSocket protocol that syncs playback across devices). `client.realtime()`
+wraps it in a typed `EventEmitter` that handles the handshake, keep-alive and
+reconnection for you. It needs the optional `ws` package (`npm install ws`); the
+rest of the library has no runtime dependencies.
+
+```ts
+const rt = client.realtime();
+rt.on('trackChange', ({ track }) => console.log('now playing:', track?.title));
+rt.on('playStateChange', (paused) => console.log(paused ? 'paused' : 'playing'));
+await rt.start();   // resolves when you call rt.stop()
+```
 
 ## Roadmap
 
-- ynison remote control (a dedicated WebSocket module, separate from this HTTP
-  client) — wrapped in a friendly real-time event API
-- typed sub-models: `Status` (permissions/subscription/plus), block-entity
-  variants, station settings/restrictions
+- typed variants for the few remaining free-form payloads (landing block
+  entities, playlist promo sub-objects)
 
 ## Development
 
