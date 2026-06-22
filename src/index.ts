@@ -88,3 +88,17 @@ export { Genre } from './models/genre.js';
 
 // Models — rotor (radio)
 export { Id, Station, StationResult, Dashboard, Sequence, StationTracksResult } from './models/rotor/rotor.js';
+
+// Models — queue
+export { Queue, QueueItem, Context } from './models/queue/queue.js';
+
+// Models — music history
+export {
+  MusicHistory,
+  MusicHistoryItems,
+  MusicHistoryTab,
+  MusicHistoryGroup,
+  MusicHistoryItem,
+  MusicHistoryItemData,
+  MusicHistoryItemId,
+} from './models/musicHistory/musicHistory.js';

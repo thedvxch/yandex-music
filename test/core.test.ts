@@ -9,6 +9,8 @@ import {
   DeviceCode,
   Genre,
   Landing,
+  MusicHistory,
+  Queue,
   StationTracksResult,
   Like,
   OAuthToken,
@@ -217,6 +219,33 @@ test('rotor models map stations and track sequence', () => {
   assert.equal(tracks?.sequence?.[0]?.track?.title, 'T');
 });
 
+test('Queue.deJson maps context and track refs', () => {
+  const queue = Queue.deJson({
+    id: 'q1',
+    currentIndex: 2,
+    modified: '2024',
+    context: { type: 'playlist', id: '5:3' },
+    tracks: [{ id: 1, albumId: 9 }],
+  });
+  assert.ok(queue);
+  assert.equal(queue.currentIndex, 2);
+  assert.equal(queue.context?.type, 'playlist');
+  assert.equal(queue.tracks?.[0]?.id, 1);
+});
+
+test('MusicHistory.deJson exposes the tab → group → item path', () => {
+  const history = MusicHistory.deJson({
+    historyTabs: [
+      {
+        date: '2024-01-01',
+        items: [{ tracks: [{ type: 'track', data: { itemId: { trackId: '42', albumId: '9' } } }] }],
+      },
+    ],
+  });
+  const trackId = history?.historyTabs?.[0]?.items?.[0]?.tracks?.[0]?.data?.itemId?.trackId;
+  assert.equal(trackId, '42');
+});
+
 test('client exposes the new method surface', () => {
   const client = new Client({ token: 'x' });
   for (const method of [
@@ -234,6 +263,10 @@ test('client exposes the new method surface', () => {
     'genres',
     'rotorStationsDashboard',
     'rotorStationTracks',
+    'queuesList',
+    'queue',
+    'queueUpdatePosition',
+    'musicHistory',
   ]) {
     assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
   }

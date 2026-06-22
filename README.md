@@ -7,11 +7,11 @@ Music HTTP API — not a transpile of any existing library. It targets modern
 Node.js (≥ 20), ships ESM with full type declarations, and has **zero runtime
 dependencies** (it uses the built-in `fetch`).
 
-> Status: growing. The transport, model machinery and the `account` / `tracks` /
-> `albums` / `artists` / `search` / `likes` / `playlists` (read) / `device auth` /
-> `landing` / `radio` domains are implemented and tested. The remaining domains
-> (queue, ynison, music history, playlist mutations, …) are being added
-> incrementally — see [Roadmap](#roadmap).
+> Status: growing. Twelve domains — `account` / `tracks` / `albums` / `artists` /
+> `search` / `likes` / `playlists` (read) / `device auth` / `landing` / `radio` /
+> `queue` / `history` — are implemented and tested. The rest (ynison remote
+> control, playlist mutations, …) are being added incrementally — see
+> [Roadmap](#roadmap).
 
 ## Install
 
@@ -71,10 +71,13 @@ console.log(await lyrics?.fetchLyrics());
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow) |
 | landing     | `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus` |
+| queue       | `queuesList`, `queue`, `queueUpdatePosition` |
+| history     | `musicHistory` |
 
 ## Roadmap
 
-- queue, ynison remote control, music history, `feed`
+- ynison remote control (a dedicated WebSocket module, separate from this HTTP client)
+- `feed`, `musicHistoryItems`, `queueCreate`
 - playlist mutations (create / rename / change / insert-track), dislikes,
   rotor feedback
 - clips, concerts, credits, disclaimers, labels, metatags, pins, presaves
