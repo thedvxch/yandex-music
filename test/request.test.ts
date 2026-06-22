@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
+  Client,
+  DEFAULT_DEVICE,
   Request,
   BadRequestError,
   NetworkError,
@@ -124,4 +126,36 @@ test('a custom fetch receives the signed headers and URL', async () => {
   expect(calls).toHaveLength(1);
   expect(calls[0]!.url).toBe('http://api/x?a=1&b=2');
   expect(calls[0]!.headers['Authorization']).toBe('OAuth tok');
+});
+
+describe('Client option overrides', () => {
+  // Capture the headers the transport actually sends.
+  function capturing(): { calls: Record<string, string>[]; fetch: FetchLike } {
+    const calls: Record<string, string>[] = [];
+    const fetch: FetchLike = async (_url, init) => {
+      calls.push(init.headers);
+      return { status: 200, arrayBuffer: async () => new TextEncoder().encode('{"result":1}').buffer };
+    };
+    return { calls, fetch };
+  }
+
+  test('userAgent overrides the default User-Agent', async () => {
+    const { calls, fetch } = capturing();
+    const client = new Client({ token: 't', userAgent: 'my-app/1.0', fetch });
+    await client.request.get('http://x');
+    expect(calls[0]!['User-Agent']).toBe('my-app/1.0');
+  });
+
+  test('headers merge onto defaults; client header is overridable', async () => {
+    const { calls, fetch } = capturing();
+    const client = new Client({ headers: { 'X-Yandex-Music-Client': 'custom', 'X-Extra': 'y' }, fetch });
+    await client.request.get('http://x');
+    expect(calls[0]!['X-Yandex-Music-Client']).toBe('custom');
+    expect(calls[0]!['X-Extra']).toBe('y');
+  });
+
+  test('device defaults to DEFAULT_DEVICE and is overridable', () => {
+    expect(new Client().device).toBe(DEFAULT_DEVICE);
+    expect(new Client({ device: 'os=Foo; model=Bar' }).device).toBe('os=Foo; model=Bar');
+  });
 });

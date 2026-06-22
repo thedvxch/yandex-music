@@ -33,6 +33,12 @@ export interface ClientOptions {
    * impersonation). Ignored when `request` is supplied. Defaults to global `fetch`.
    */
   fetch?: FetchLike;
+  /** `User-Agent` value. Ignored when `request` is supplied. Defaults to the library UA. */
+  userAgent?: string;
+  /** Extra headers merged onto the defaults. Ignored when `request` is supplied. */
+  headers?: Record<string, string>;
+  /** Device descriptor for queue requests. Defaults to {@link DEFAULT_DEVICE}. */
+  device?: string;
   /** Response language. Defaults to `ru`. One of `en`/`uz`/`uk`/`us`/`ru`/`kk`/`hy`. */
   language?: string;
   /**
@@ -73,13 +79,19 @@ export abstract class ClientBase {
     this.token = options.token;
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.language = options.language ?? 'ru';
+    this.device = options.device ?? DEFAULT_DEVICE;
     this.reportUnknownFields = options.reportUnknownFields ?? false;
 
     if (options.request) {
       this.request = options.request;
       this.request.setClient(this as unknown as Client);
     } else {
-      this.request = new Request({ client: this as unknown as Client, fetch: options.fetch });
+      this.request = new Request({
+        client: this as unknown as Client,
+        fetch: options.fetch,
+        userAgent: options.userAgent,
+        headers: options.headers,
+      });
     }
     this.request.setLanguage(this.language);
   }

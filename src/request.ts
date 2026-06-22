@@ -76,6 +76,8 @@ export interface RequestInit {
   timeout?: number;
   /** `fetch` implementation to use. Defaults to the global `fetch`. */
   fetch?: FetchLike;
+  /** `User-Agent` header value. Defaults to {@link USER_AGENT}. */
+  userAgent?: string;
 }
 
 interface Envelope {
@@ -99,6 +101,8 @@ export class Request {
   timeout: number;
   /** The owning client. */
   client?: Client;
+  /** `User-Agent` sent with every request. */
+  userAgent: string;
   /** The `fetch` implementation used for every request. */
   private readonly fetchImpl: FetchLike;
 
@@ -106,10 +110,13 @@ export class Request {
    * @param options - Transport configuration.
    */
   constructor(options: RequestInit = {}) {
-    this.headers = options.headers ?? { ...BASE_HEADERS };
+    // Custom headers merge onto BASE_HEADERS so defaults (e.g. the client
+    // header) survive unless explicitly overridden.
+    this.headers = { ...BASE_HEADERS, ...options.headers };
     this.proxyUrl = options.proxyUrl;
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? (globalThis.fetch as FetchLike);
+    this.userAgent = options.userAgent ?? USER_AGENT;
     if (options.client) {
       this.setClient(options.client);
     }
@@ -306,7 +313,7 @@ export class Request {
     const ms = timeout ?? this.timeout;
     const timer = setTimeout(() => controller.abort(), ms);
 
-    const headers: Record<string, string> = { ...this.headers, 'User-Agent': USER_AGENT };
+    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
     if (body?.form) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
     } else if (body?.json) {
