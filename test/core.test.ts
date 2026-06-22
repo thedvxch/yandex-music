@@ -3,8 +3,16 @@ import test from 'node:test';
 import {
   Album,
   Artist,
+  Best,
+  Client,
+  DeviceCode,
+  Like,
+  OAuthToken,
   NetworkError,
   NotFoundError,
+  Playlist,
+  Search,
+  Suggestions,
   Track,
   YandexMusicError,
   convertTrackIdToNumber,
@@ -86,4 +94,90 @@ test('isJsonObject narrows correctly', () => {
   assert.equal(isJsonObject([]), false);
   assert.equal(isJsonObject(null), false);
   assert.equal(isJsonObject('x'), false);
+});
+
+test('Search.deJson builds typed result blocks and best match', () => {
+  const search = Search.deJson({
+    searchRequestId: 'req-1',
+    text: 'query',
+    best: { type: 'artist', result: { id: 7, name: 'Best Artist' } },
+    tracks: { type: 'track', total: 1, perPage: 20, order: 0, results: [{ id: 1, title: 'T' }] },
+    albums: { total: 0, perPage: 20, order: 1, results: [] },
+  });
+
+  assert.ok(search);
+  assert.equal(search.searchRequestId, 'req-1');
+  assert.ok(search.best instanceof Best);
+  assert.ok(search.best?.result instanceof Artist);
+  assert.equal((search.best?.result as Artist).name, 'Best Artist');
+  assert.equal(search.tracks?.total, 1);
+  assert.ok(search.tracks?.results?.[0] instanceof Track);
+  assert.equal(search.tracks?.results?.[0]?.title, 'T');
+  assert.equal(search.albums?.type, 'album'); // filled from the type hint
+});
+
+test('Suggestions.deJson maps best + completions', () => {
+  const sug = Suggestions.deJson({
+    best: { type: 'track', result: { id: 9, title: 'Z' } },
+    suggestions: ['ab', 'abc'],
+  });
+  assert.ok(sug);
+  assert.deepEqual(sug.suggestions, ['ab', 'abc']);
+  assert.ok(sug.best?.result instanceof Track);
+});
+
+test('Like.deJson resolves the entity by type', () => {
+  const like = Like.deJson({ type: 'album', id: '5', album: { id: 5, title: 'A' } });
+  assert.ok(like);
+  assert.ok(like.album instanceof Album);
+  assert.equal(like.album?.title, 'A');
+});
+
+test('Playlist.deJson maps owner, tracks and nesting', () => {
+  const playlist = Playlist.deJson({
+    kind: 3,
+    title: 'My list',
+    trackCount: 1,
+    owner: { uid: 1, login: 'me' },
+    tracks: [{ id: '42', timestamp: '2020' }],
+  });
+  assert.ok(playlist);
+  assert.equal(playlist.title, 'My list');
+  assert.equal(playlist.owner?.login, 'me');
+  assert.equal(playlist.tracks?.[0]?.id, '42');
+});
+
+test('device auth models parse the OAuth snake_case payload', () => {
+  const code = DeviceCode.deJson({
+    device_code: 'd',
+    user_code: 'ABCD',
+    verification_url: 'u',
+    interval: 5,
+    expires_in: 300,
+  });
+  assert.equal(code?.userCode, 'ABCD');
+  assert.equal(code?.deviceCode, 'd');
+  assert.equal(code?.expiresIn, 300);
+
+  const token = OAuthToken.deJson({ access_token: 'tok', token_type: 'bearer', expires_in: 100 });
+  assert.equal(token?.accessToken, 'tok');
+  assert.equal(token?.tokenType, 'bearer');
+  assert.equal(token?.expiresIn, 100);
+});
+
+test('client exposes the new method surface', () => {
+  const client = new Client({ token: 'x' });
+  for (const method of [
+    'tracks',
+    'search',
+    'searchSuggest',
+    'usersLikesTracksAdd',
+    'usersLikesTracks',
+    'usersPlaylists',
+    'playlist',
+    'requestDeviceCode',
+    'deviceAuth',
+  ]) {
+    assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
+  }
 });

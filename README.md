@@ -7,10 +7,11 @@ Music HTTP API — not a transpile of any existing library. It targets modern
 Node.js (≥ 20), ships ESM with full type declarations, and has **zero runtime
 dependencies** (it uses the built-in `fetch`).
 
-> Status: early. The transport, model machinery and the `tracks` / `albums` /
-> `artists` / `account` domains are implemented and tested. The remaining
-> domains (search, playlists, landing, likes, radio, queue, ynison, device auth,
-> …) are being added incrementally — see [Roadmap](#roadmap).
+> Status: early but growing. The transport, model machinery and the `account` /
+> `tracks` / `albums` / `artists` / `search` / `likes` / `playlists` (read) /
+> `device auth` domains are implemented and tested. The remaining domains
+> (landing, radio, queue, ynison, music history, playlist mutations, …) are being
+> added incrementally — see [Roadmap](#roadmap).
 
 ## Install
 
@@ -58,19 +59,23 @@ console.log(await lyrics?.fetchLyrics());
 
 ## Implemented endpoints
 
-| Domain   | Methods |
-| -------- | ------- |
-| account  | `init`, `accountStatus` |
-| tracks   | `tracks`, `tracksDownloadInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer` |
-| albums   | `albums`, `albumsWithTracks` |
-| artists  | `artists`, `artistsTracks` |
+| Domain      | Methods |
+| ----------- | ------- |
+| account     | `init`, `accountStatus` |
+| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer` |
+| albums      | `albums`, `albumsWithTracks` |
+| artists     | `artists`, `artistsTracks` |
+| search      | `search`, `searchSuggest` |
+| likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists |
+| playlists   | `playlist`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds` |
+| device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow) |
 
 ## Roadmap
 
-- search (`search`, `searchSuggest`) + playlist/video/user models
-- landing, likes, radio (rotor), queue, ynison remote control
-- device auth (OAuth device flow), clips, concerts, credits, disclaimers,
-  labels, metatags, music history, pins, presaves
+- landing (`feed`, `landing`, `chart`, `newReleases`, `genres`, …)
+- radio (rotor), queue, ynison remote control, music history
+- playlist mutations (create / rename / change / insert-track)
+- dislikes, clips, concerts, credits, disclaimers, labels, metatags, pins, presaves
 - typed `Status` sub-models (permissions, subscription, plus)
 
 ## Development

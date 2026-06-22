@@ -102,7 +102,7 @@ export abstract class ClientBase {
       [`${objectType}-ids`]: ids,
     };
     const url = `${this.baseUrl}/${objectType}s${objectType === 'playlist' ? '/list' : ''}`;
-    const result = await this.request.post(url, body as Record<string, never>);
+    const result = await this.request.post(url, body);
     return deList(deJson, result as JSONValue, this as unknown as Client);
   }
 }

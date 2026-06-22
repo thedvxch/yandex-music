@@ -64,3 +64,20 @@ export { Album, Label, TrackPosition, Deprecation, AlbumActionButton } from './m
 
 // Models — account
 export { Status, Account, PassportPhone } from './models/account/account.js';
+
+// Models — playlist / user / video / track refs
+export { Playlist } from './models/playlist/playlist.js';
+export { User } from './models/user.js';
+export { Video } from './models/video.js';
+export { TrackShort, TrackId } from './models/trackShort.js';
+
+// Models — search
+export { Search, SearchResult, Best, Suggestions } from './models/search/search.js';
+export type { SearchEntity } from './models/search/search.js';
+export type { SearchType } from './methods/search.js';
+
+// Models — likes / device auth
+export { Like, TracksList } from './models/like.js';
+export { DeviceCode, OAuthToken } from './models/deviceAuth.js';
+export type { LikeableType } from './methods/likes.js';
+export type { OnCodeCallback, DeviceAuthOptions } from './methods/deviceAuth.js';

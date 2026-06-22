@@ -7,13 +7,23 @@ import { ClientBase, type ClientOptions } from './clientBase.js';
 import { AccountMixin } from './methods/account.js';
 import { AlbumsMixin } from './methods/albums.js';
 import { ArtistsMixin } from './methods/artists.js';
+import { DeviceAuthMixin } from './methods/deviceAuth.js';
+import { LikesMixin } from './methods/likes.js';
+import { PlaylistsMixin } from './methods/playlists.js';
+import { SearchMixin } from './methods/search.js';
 import { TracksMixin } from './methods/tracks.js';
 
 /**
  * The method groups layered onto {@link ClientBase}. Splitting them into mixins
  * keeps each domain in its own file while preserving a single flat client API.
  */
-const ComposedClient = AccountMixin(TracksMixin(AlbumsMixin(ArtistsMixin(ClientBase))));
+const ComposedClient = AccountMixin(
+  TracksMixin(
+    SearchMixin(
+      AlbumsMixin(ArtistsMixin(PlaylistsMixin(LikesMixin(DeviceAuthMixin(ClientBase))))),
+    ),
+  ),
+);
 
 /**
  * Typed, async client for the Yandex Music API.

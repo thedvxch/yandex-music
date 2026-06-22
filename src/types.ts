@@ -16,4 +16,4 @@ export type JSONObject = { [key: string]: JSONValue };
  *
  * @typeParam T - The model type produced.
  */
-export type DeJson<T> = (raw: JSONValue, client?: import('./client.js').Client) => T | null;
+export type DeJson<T> = (raw: JSONValue | undefined, client?: import('./client.js').Client) => T | null;
