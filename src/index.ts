@@ -60,7 +60,7 @@ export {
   R128,
   LyricsMajor,
 } from './models/track/nested.js';
-export { DownloadInfo, LosslessDownloadInfo, TrackLyrics, SimilarTracks, TrackFullInfo, TrackTrailer } from './models/track/extras.js';
+export { DownloadInfo, LosslessDownloadInfo, decryptEncraw, TrackLyrics, SimilarTracks, TrackFullInfo, TrackTrailer } from './models/track/extras.js';
 
 // Models — artist
 export { Artist, Counts, Ratings, Description } from './models/artist/artist.js';

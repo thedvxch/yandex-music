@@ -122,12 +122,18 @@ export class DownloadInfo extends YandexMusicModel {
 }
 
 /**
- * Decrypt an `encraw` (AES-CTR) stream with a hex key.
+ * Decrypt an `encraw` (AES-CTR) lossless stream with its hex key.
  *
  * The IV is 16 zero bytes (12-byte zero nonce + zero counter); the key length
- * selects AES-128 vs AES-256.
+ * selects AES-128 vs AES-256. Exported for consumers that run their own download
+ * pipeline (streaming, progress, custom caching) off {@link LosslessDownloadInfo.urls}
+ * + {@link LosslessDownloadInfo.key} instead of {@link LosslessDownloadInfo.downloadBytes}.
+ *
+ * @param data - The encrypted audio bytes.
+ * @param keyHex - The hex AES-CTR key from `/get-file-info`.
+ * @returns The decrypted audio bytes.
  */
-function decryptEncraw(data: Uint8Array, keyHex: string): Uint8Array {
+export function decryptEncraw(data: Uint8Array, keyHex: string): Uint8Array {
   const key = Buffer.from(keyHex, 'hex');
   const iv = Buffer.alloc(16);
   const algo = key.length === 32 ? 'aes-256-ctr' : 'aes-128-ctr';
