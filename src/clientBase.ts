@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 import { deList } from './base.js';
-import { Request } from './request.js';
+import { Request, type FetchLike } from './request.js';
 import type { Client } from './client.js';
 import type { Status } from './models/account/account.js';
 import type { DeJson, JSONValue } from './types.js';
@@ -18,7 +18,7 @@ export const DEFAULT_BASE_URL = 'https://api.music.yandex.net';
 
 /** Default device descriptor sent with queue-related requests. */
 export const DEFAULT_DEVICE =
-  'os=Python; os_version=; manufacturer=Marshal; model=Yandex Music API; clid=; device_id=random; uuid=random';
+  'os=TypeScript; os_version=; manufacturer=dvxch; model=yandex-music; clid=; device_id=random; uuid=random';
 
 /** Options accepted by the {@link Client} constructor. */
 export interface ClientOptions {
@@ -28,6 +28,11 @@ export interface ClientOptions {
   baseUrl?: string;
   /** A pre-configured {@link Request} transport (custom headers, proxy, timeout). */
   request?: Request;
+  /**
+   * A custom `fetch` implementation (e.g. `node-wreq` for browser TLS
+   * impersonation). Ignored when `request` is supplied. Defaults to global `fetch`.
+   */
+  fetch?: FetchLike;
   /** Response language. Defaults to `ru`. One of `en`/`uz`/`uk`/`us`/`ru`/`kk`/`hy`. */
   language?: string;
   /**
@@ -74,7 +79,7 @@ export abstract class ClientBase {
       this.request = options.request;
       this.request.setClient(this as unknown as Client);
     } else {
-      this.request = new Request({ client: this as unknown as Client });
+      this.request = new Request({ client: this as unknown as Client, fetch: options.fetch });
     }
     this.request.setLanguage(this.language);
   }

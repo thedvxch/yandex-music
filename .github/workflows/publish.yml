@@ -1,0 +1,41 @@
+name: Publish
+
+# Publishes to npm via OIDC Trusted Publishing — no NPM_TOKEN secret.
+# npm exchanges the workflow's short-lived OIDC token for publish rights and
+# attaches build provenance automatically. Set up the trusted publisher on
+# npmjs.com (Package → Settings → Trusted Publisher) pointing at this file.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: # allow manual runs from the Actions tab
+    inputs:
+      npm_tag:
+        description: "npm dist-tag (latest | beta | next | …)"
+        required: false
+        type: string
+        default: "latest"
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 still ships npm 10.
+      - run: npm install -g npm@latest
+
+      - run: npm ci
+
+      # prepublishOnly (clean + typecheck + test + build) runs here automatically.
+      # On a release event inputs.npm_tag is empty, so the expression defaults to "latest".
+      - run: npm publish --tag "${{ inputs.npm_tag || 'latest' }}"

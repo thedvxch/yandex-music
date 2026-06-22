@@ -23,7 +23,7 @@ import type { Client } from './client.js';
 import type { JSONValue } from './types.js';
 
 /** `User-Agent` sent with every request. */
-export const USER_AGENT = 'Yandex-Music-API';
+export const USER_AGENT = 'dvxch-yandex-music';
 
 /** Default per-request timeout in milliseconds. */
 export const DEFAULT_TIMEOUT_MS = 5000;
@@ -46,6 +46,24 @@ export type ParamValue = string | number | boolean | null | undefined;
 /** Query string / form parameters. Array values are repeated per key. */
 export type Params = Record<string, ParamValue | ParamValue[]>;
 
+/** The minimal slice of a `fetch` Response the transport reads. */
+export interface ResponseLike {
+  /** HTTP status code. */
+  status: number;
+  /** The response body as bytes. */
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+/**
+ * The minimal `fetch` contract the transport relies on. The global `fetch` and
+ * drop-in replacements (e.g. `node-wreq` for browser TLS impersonation) both
+ * satisfy it, so either can be injected via {@link RequestInit.fetch}.
+ */
+export type FetchLike = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body?: string; signal: AbortSignal },
+) => Promise<ResponseLike>;
+
 /** Options accepted by {@link Request} constructor. */
 export interface RequestInit {
   /** The owning client, used to attach the `Authorization` header. */
@@ -56,6 +74,8 @@ export interface RequestInit {
   proxyUrl?: string;
   /** Default timeout in milliseconds. Defaults to {@link DEFAULT_TIMEOUT_MS}. */
   timeout?: number;
+  /** `fetch` implementation to use. Defaults to the global `fetch`. */
+  fetch?: FetchLike;
 }
 
 interface Envelope {
@@ -79,6 +99,8 @@ export class Request {
   timeout: number;
   /** The owning client. */
   client?: Client;
+  /** The `fetch` implementation used for every request. */
+  private readonly fetchImpl: FetchLike;
 
   /**
    * @param options - Transport configuration.
@@ -87,6 +109,7 @@ export class Request {
     this.headers = options.headers ?? { ...BASE_HEADERS };
     this.proxyUrl = options.proxyUrl;
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+    this.fetchImpl = options.fetch ?? (globalThis.fetch as FetchLike);
     if (options.client) {
       this.setClient(options.client);
     }
@@ -290,9 +313,9 @@ export class Request {
       headers['Content-Type'] = 'application/json';
     }
 
-    let response: Response;
+    let response: ResponseLike;
     try {
-      response = await fetch(url, {
+      response = await this.fetchImpl(url, {
         method,
         headers,
         body: body?.body,

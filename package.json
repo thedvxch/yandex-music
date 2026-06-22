@@ -1,6 +1,6 @@
 {
   "name": "@dvxch/yandex-music",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Typed, async TypeScript client for the Yandex Music API",
   "keywords": [
     "yandex",
@@ -10,7 +10,7 @@
     "client",
     "typescript"
   ],
-  "license": "LGPL-3.0-or-later",
+  "license": "MIT",
   "homepage": "https://github.com/thedvxch/yandex-music#readme",
   "repository": {
     "type": "git",
@@ -40,13 +40,14 @@
     "dist",
     "src",
     "README.md",
-    "README.ru.md"
+    "README.en.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json",
-    "test": "node --import tsx --test test/**/*.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist",
     "docs": "typedoc",
     "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build"
@@ -54,9 +55,11 @@
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/ws": "^8.18.1",
+    "node-wreq": "^2.4.1",
     "tsx": "^4.19.2",
     "typedoc": "^0.28.19",
     "typescript": "^5.7.3",
+    "vitest": "^4.1.9",
     "ws": "^8.21.0"
   },
   "peerDependencies": {

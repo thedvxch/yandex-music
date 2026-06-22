@@ -12,7 +12,7 @@ export type { BatchObjectType } from './clientBase.js';
 
 // Transport
 export { Request, USER_AGENT, DEFAULT_TIMEOUT_MS, BASE_HEADERS } from './request.js';
-export type { Params, ParamValue, RequestInit } from './request.js';
+export type { Params, ParamValue, RequestInit, FetchLike, ResponseLike } from './request.js';
 
 // Signing
 export { getSignRequest, convertTrackIdToNumber, DEFAULT_SIGN_KEY } from './signRequest.js';

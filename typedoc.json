@@ -1,11 +1,14 @@
 {
   "$schema": "https://typedoc.org/schema.json",
+  "name": "@dvxch/yandex-music",
   "entryPoints": ["src/index.ts"],
   "out": "docs/api",
   "tsconfig": "tsconfig.build.json",
   "excludeInternal": true,
   "readme": "README.md",
+  "githubPages": true,
   "navigationLinks": {
-    "npm": "https://www.npmjs.com/package/@dvxch/yandex-music"
+    "npm": "https://www.npmjs.com/package/@dvxch/yandex-music",
+    "GitHub": "https://github.com/thedvxch/yandex-music"
   }
 }

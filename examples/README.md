@@ -23,6 +23,7 @@ YM_TOKEN=... npx tsx examples/08-charts-and-new.ts
 YM_TOKEN=... npx tsx examples/09-lyrics.ts            # optional: trackId arg
 YM_TOKEN=... npx tsx examples/10-download-quality.ts  # optional: trackId arg
 YM_TOKEN=... npx tsx examples/11-artist.ts            # optional: artistId arg
+YM_TOKEN=... npx tsx examples/12-custom-fetch.ts      # needs: npm install node-wreq
 ```
 
 | File | Shows |
@@ -38,5 +39,6 @@ YM_TOKEN=... npx tsx examples/11-artist.ts            # optional: artistId arg
 | `09-lyrics.ts`            | time-synced (LRC) lyrics |
 | `10-download-quality.ts`  | quality/codec selection incl. lossless (FLAC) |
 | `11-artist.ts`            | artist brief info, tracks, discography, similar |
+| `12-custom-fetch.ts`      | inject a custom `fetch` (node-wreq browser TLS impersonation) |
 
 All examples are run against the live API as part of release verification.
