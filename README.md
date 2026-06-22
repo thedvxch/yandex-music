@@ -7,11 +7,11 @@ Music HTTP API — not a transpile of any existing library. It targets modern
 Node.js (≥ 20), ships ESM with full type declarations, and has **zero runtime
 dependencies** (it uses the built-in `fetch`).
 
-> Status: early but growing. The transport, model machinery and the `account` /
-> `tracks` / `albums` / `artists` / `search` / `likes` / `playlists` (read) /
-> `device auth` domains are implemented and tested. The remaining domains
-> (landing, radio, queue, ynison, music history, playlist mutations, …) are being
-> added incrementally — see [Roadmap](#roadmap).
+> Status: growing. The transport, model machinery and the `account` / `tracks` /
+> `albums` / `artists` / `search` / `likes` / `playlists` (read) / `device auth` /
+> `landing` / `radio` domains are implemented and tested. The remaining domains
+> (queue, ynison, music history, playlist mutations, …) are being added
+> incrementally — see [Roadmap](#roadmap).
 
 ## Install
 
@@ -69,14 +69,17 @@ console.log(await lyrics?.fetchLyrics());
 | likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists |
 | playlists   | `playlist`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow) |
+| landing     | `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
+| radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus` |
 
 ## Roadmap
 
-- landing (`feed`, `landing`, `chart`, `newReleases`, `genres`, …)
-- radio (rotor), queue, ynison remote control, music history
-- playlist mutations (create / rename / change / insert-track)
-- dislikes, clips, concerts, credits, disclaimers, labels, metatags, pins, presaves
-- typed `Status` sub-models (permissions, subscription, plus)
+- queue, ynison remote control, music history, `feed`
+- playlist mutations (create / rename / change / insert-track), dislikes,
+  rotor feedback
+- clips, concerts, credits, disclaimers, labels, metatags, pins, presaves
+- typed sub-models: `Status` (permissions/subscription/plus), block-entity
+  variants, station settings/restrictions
 
 ## Development
 

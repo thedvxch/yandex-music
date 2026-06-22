@@ -5,7 +5,11 @@ import {
   Artist,
   Best,
   Client,
+  Dashboard,
   DeviceCode,
+  Genre,
+  Landing,
+  StationTracksResult,
   Like,
   OAuthToken,
   NetworkError,
@@ -165,6 +169,54 @@ test('device auth models parse the OAuth snake_case payload', () => {
   assert.equal(token?.expiresIn, 100);
 });
 
+test('Landing.deJson maps blocks and entities', () => {
+  const landing = Landing.deJson({
+    pumpkin: false,
+    contentId: 'home',
+    blocks: [
+      {
+        id: 'b1',
+        type: 'personal-playlists',
+        title: 'For you',
+        entities: [{ id: 'e1', type: 'personal-playlist', data: { foo: 1 } }],
+      },
+    ],
+  });
+  assert.ok(landing);
+  assert.equal(landing.blocks?.length, 1);
+  assert.equal(landing.blocks?.[0]?.title, 'For you');
+  assert.equal(landing.blocks?.[0]?.entities?.[0]?.id, 'e1');
+});
+
+test('Genre.deJson nests sub-genres', () => {
+  const genre = Genre.deJson({
+    id: 'pop',
+    title: 'Pop',
+    weight: 10,
+    subGenres: [{ id: 'kpop', title: 'K-Pop' }],
+  });
+  assert.ok(genre);
+  assert.equal(genre.subGenres?.[0]?.title, 'K-Pop');
+});
+
+test('rotor models map stations and track sequence', () => {
+  const dash = Dashboard.deJson({
+    dashboardId: 'd1',
+    pumpkin: false,
+    stations: [{ station: { id: { type: 'genre', tag: 'pop' }, name: 'Pop' } }],
+  });
+  assert.equal(dash?.stations?.[0]?.station?.name, 'Pop');
+  assert.equal(dash?.stations?.[0]?.station?.id?.tag, 'pop');
+
+  const tracks = StationTracksResult.deJson({
+    id: { type: 'genre', tag: 'pop' },
+    batchId: 'batch',
+    sequence: [{ type: 'track', liked: false, track: { id: 1, title: 'T' } }],
+  });
+  assert.equal(tracks?.batchId, 'batch');
+  assert.equal(tracks?.sequence?.[0]?.track?.title, 'T');
+});
+
 test('client exposes the new method surface', () => {
   const client = new Client({ token: 'x' });
   for (const method of [
@@ -177,6 +229,11 @@ test('client exposes the new method surface', () => {
     'playlist',
     'requestDeviceCode',
     'deviceAuth',
+    'landing',
+    'chart',
+    'genres',
+    'rotorStationsDashboard',
+    'rotorStationTracks',
   ]) {
     assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
   }

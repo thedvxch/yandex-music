@@ -8,8 +8,10 @@ import { AccountMixin } from './methods/account.js';
 import { AlbumsMixin } from './methods/albums.js';
 import { ArtistsMixin } from './methods/artists.js';
 import { DeviceAuthMixin } from './methods/deviceAuth.js';
+import { LandingMixin } from './methods/landing.js';
 import { LikesMixin } from './methods/likes.js';
 import { PlaylistsMixin } from './methods/playlists.js';
+import { RadioMixin } from './methods/radio.js';
 import { SearchMixin } from './methods/search.js';
 import { TracksMixin } from './methods/tracks.js';
 
@@ -20,7 +22,11 @@ import { TracksMixin } from './methods/tracks.js';
 const ComposedClient = AccountMixin(
   TracksMixin(
     SearchMixin(
-      AlbumsMixin(ArtistsMixin(PlaylistsMixin(LikesMixin(DeviceAuthMixin(ClientBase))))),
+      AlbumsMixin(
+        ArtistsMixin(
+          PlaylistsMixin(LandingMixin(RadioMixin(LikesMixin(DeviceAuthMixin(ClientBase))))),
+        ),
+      ),
     ),
   ),
 );

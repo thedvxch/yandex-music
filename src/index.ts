@@ -81,3 +81,10 @@ export { Like, TracksList } from './models/like.js';
 export { DeviceCode, OAuthToken } from './models/deviceAuth.js';
 export type { LikeableType } from './methods/likes.js';
 export type { OnCodeCallback, DeviceAuthOptions } from './methods/deviceAuth.js';
+
+// Models — landing
+export { Landing, Block, BlockEntity, LandingList, ChartInfo, Chart, ChartItem } from './models/landing/landing.js';
+export { Genre } from './models/genre.js';
+
+// Models — rotor (radio)
+export { Id, Station, StationResult, Dashboard, Sequence, StationTracksResult } from './models/rotor/rotor.js';
