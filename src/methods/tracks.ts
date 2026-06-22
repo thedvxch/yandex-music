@@ -4,11 +4,42 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { isJsonObject } from '../base.js';
 import { Track } from '../models/track/track.js';
 import { DownloadInfo, SimilarTracks, TrackFullInfo, TrackLyrics, TrackTrailer } from '../models/track/extras.js';
+import { Supplement } from '../models/supplement.js';
+import { ShotEvent } from '../models/shot.js';
 import { getSignRequest } from '../signRequest.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
+
+/** Parameters for reporting playback progress via {@link TracksMixin.playAudio}. */
+export interface PlayAudioOptions {
+  /** Track id. */
+  trackId: string | number;
+  /** Name of the client the track is played from. */
+  from: string;
+  /** Album id the track belongs to. */
+  albumId: string | number;
+  /** Playlist id, when a playlist is playing. */
+  playlistId?: string;
+  /** Whether the track is played from cache. */
+  fromCache?: boolean;
+  /** Unique play id. */
+  playId?: string;
+  /** User id. Defaults to the authenticated account. */
+  uid?: number;
+  /** ISO timestamp of the event. Defaults to now. */
+  timestamp?: string;
+  /** Track length in seconds. */
+  trackLengthSeconds?: number;
+  /** Seconds played in total. */
+  totalPlayedSeconds?: number;
+  /** Final played-seconds position. */
+  endPositionSeconds?: number;
+  /** ISO client timestamp. Defaults to now. */
+  clientNow?: string;
+}
 
 /**
  * Adds track endpoints to the client.
@@ -107,6 +138,80 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
       const url = `${this.baseUrl}/tracks/${trackId}/trailer`;
       const result = await this.request.get(url);
       return TrackTrailer.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch supplementary information about a track (legacy lyrics, videos).
+     *
+     * @param trackId - The track id.
+     * @returns The supplement, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async trackSupplement(trackId: string | number): Promise<Supplement | null> {
+      const url = `${this.baseUrl}/tracks/${trackId}/supplement`;
+      const result = await this.request.get(url);
+      return Supplement.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Report the current playback state of a track.
+     *
+     * @param options - The playback report.
+     * @returns Whether the report was accepted.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async playAudio(options: PlayAudioOptions): Promise<boolean> {
+      const now = `${new Date().toISOString()}`;
+      const uid = options.uid ?? this.accountUid;
+      const data = {
+        'track-id': options.trackId,
+        'from-cache': String(options.fromCache ?? false),
+        from: options.from,
+        'play-id': options.playId ?? '',
+        uid: uid ?? '',
+        timestamp: options.timestamp ?? now,
+        'track-length-seconds': options.trackLengthSeconds ?? 0,
+        'total-played-seconds': options.totalPlayedSeconds ?? 0,
+        'end-position-seconds': options.endPositionSeconds ?? 0,
+        'album-id': options.albumId,
+        'playlist-id': options.playlistId ?? '',
+        'client-now': options.clientNow ?? now,
+      };
+      const result = await this.request.post(`${this.baseUrl}/play-audio`, data);
+      return result === 'ok';
+    }
+
+    /**
+     * Fetch an ad or an Alice shot to play after a track.
+     *
+     * @param nextTrackId - The upcoming track id.
+     * @param contextItem - Context identifier (for playlists, `ownerId:playlistId`).
+     * @param prevTrackId - The previous track id (optional for Alice shots).
+     * @param context - Context kind. Defaults to `playlist`.
+     * @param types - What to return after the track. Defaults to `shot`.
+     * @param from - Where the context was entered from.
+     * @returns The shot event, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async afterTrack(
+      nextTrackId: string | number,
+      contextItem: string,
+      prevTrackId?: string | number,
+      context = 'playlist',
+      types = 'shot',
+      from = 'mobile-landing-origin-default',
+    ): Promise<ShotEvent | null> {
+      const url = `${this.baseUrl}/after-track`;
+      const result = await this.request.get(url, {
+        from,
+        prevTrackId,
+        nextTrackId,
+        context,
+        contextItem,
+        types,
+      });
+      const shotEvent = isJsonObject(result) ? result['shotEvent'] : undefined;
+      return ShotEvent.deJson(shotEvent, this as unknown as Client);
     }
   }
 

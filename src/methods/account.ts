@@ -5,6 +5,14 @@
  */
 import { ClientBase } from '../clientBase.js';
 import { Status } from '../models/account/account.js';
+import {
+  Experiments,
+  ExperimentsDetails,
+  PermissionAlerts,
+  PromoCodeStatus,
+  Settings,
+  UserSettings,
+} from '../models/account/settings.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -45,6 +53,95 @@ export function AccountMixin<TBase extends AbstractConstructor<ClientBase>>(Base
       const url = `${this.baseUrl}/account/status`;
       const result = await this.request.get(url);
       return Status.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the current user's settings.
+     *
+     * @returns The user settings, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async accountSettings(): Promise<UserSettings | null> {
+      const result = await this.request.get(`${this.baseUrl}/account/settings`);
+      return UserSettings.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Change one or many of the current user's settings.
+     *
+     * @param paramOrData - A single setting name, or a map of setting names to values.
+     * @param value - The value, when `paramOrData` is a single setting name.
+     * @returns The updated user settings, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async accountSettingsSet(
+      paramOrData: string | Record<string, string | number | boolean>,
+      value?: string | number | boolean,
+    ): Promise<UserSettings | null> {
+      const data =
+        typeof paramOrData === 'string' ? { [paramOrData]: String(value) } : paramOrData;
+      const result = await this.request.post(`${this.baseUrl}/account/settings`, data);
+      return UserSettings.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch purchase offers and payment configuration.
+     *
+     * @returns The settings, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async settings(): Promise<Settings | null> {
+      const result = await this.request.get(`${this.baseUrl}/settings`);
+      return Settings.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch permission alert messages.
+     *
+     * @returns The alerts, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async permissionAlerts(): Promise<PermissionAlerts | null> {
+      const result = await this.request.get(`${this.baseUrl}/permission-alerts`);
+      return PermissionAlerts.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the account's experiment buckets.
+     *
+     * @returns The experiments, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async accountExperiments(): Promise<Experiments | null> {
+      const result = await this.request.get(`${this.baseUrl}/account/experiments`);
+      return Experiments.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch detailed experiment configuration for the account.
+     *
+     * @returns The detailed experiments, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async accountExperimentsDetails(): Promise<ExperimentsDetails | null> {
+      const result = await this.request.get(`${this.baseUrl}/account/experiments/details`);
+      return ExperimentsDetails.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Activate a promo code.
+     *
+     * @param code - The promo code.
+     * @param language - Response language. Defaults to the client language.
+     * @returns The activation result, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async consumePromoCode(code: string, language?: string): Promise<PromoCodeStatus | null> {
+      const result = await this.request.post(`${this.baseUrl}/account/consume-promo-code`, {
+        code,
+        language: language ?? this.language,
+      });
+      return PromoCodeStatus.deJson(result, this as unknown as Client);
     }
   }
 

@@ -64,6 +64,20 @@ export { Album, Label, TrackPosition, Deprecation, AlbumActionButton } from './m
 
 // Models — account
 export { Status, Account, PassportPhone } from './models/account/account.js';
+export {
+  UserSettings,
+  Settings,
+  PermissionAlerts,
+  PromoCodeStatus,
+  Experiments,
+  ExperimentsDetails,
+} from './models/account/settings.js';
+
+// Models — supplement / shot / trailer
+export { Supplement, Lyrics, VideoSupplement } from './models/supplement.js';
+export { Shot, ShotData, ShotType, ShotEvent } from './models/shot.js';
+export { TrailerInfo } from './models/trailerInfo.js';
+export { AlbumTrailer, AlbumSimilarEntities } from './models/album/albumExtras.js';
 
 // Models — playlist / user / video / track refs
 export { Playlist } from './models/playlist/playlist.js';
@@ -79,8 +93,9 @@ export type { SearchType } from './methods/search.js';
 // Models — likes / device auth
 export { Like, TracksList } from './models/like.js';
 export { DeviceCode, OAuthToken } from './models/deviceAuth.js';
-export type { LikeableType } from './methods/likes.js';
+export type { LikeableType, DislikeableType } from './methods/likes.js';
 export type { OnCodeCallback, DeviceAuthOptions } from './methods/deviceAuth.js';
+export type { PlayAudioOptions } from './methods/tracks.js';
 
 // Models — landing
 export { Landing, Block, BlockEntity, LandingList, ChartInfo, Chart, ChartItem } from './models/landing/landing.js';
