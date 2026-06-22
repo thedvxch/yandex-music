@@ -1,0 +1,70 @@
+{
+  "name": "@dvxch/yandex-music",
+  "version": "0.1.2",
+  "description": "Typed, async TypeScript client for the Yandex Music API",
+  "keywords": [
+    "yandex",
+    "yandex-music",
+    "music",
+    "api",
+    "client",
+    "typescript"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/thedvxch/yandex-music#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thedvxch/yandex-music.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thedvxch/yandex-music/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "README.en.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "clean": "rm -rf dist",
+    "docs": "typedoc",
+    "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.19.2",
+    "typedoc": "^0.28.19",
+    "typescript": "^5.7.3",
+    "ws": "^8.21.0"
+  },
+  "peerDependencies": {
+    "ws": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  }
+}

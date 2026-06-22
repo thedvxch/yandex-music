@@ -1,0 +1,135 @@
+/**
+ * The public {@link Client} entry point.
+ *
+ * @packageDocumentation
+ */
+import { ClientBase, type ClientOptions } from './clientBase.js';
+import { AccountMixin } from './methods/account.js';
+import { AlbumsMixin } from './methods/albums.js';
+import { ArtistsMixin } from './methods/artists.js';
+import { ClipsMixin } from './methods/clips.js';
+import { ConcertsMixin } from './methods/concerts.js';
+import { CreditsMixin } from './methods/credits.js';
+import { DeviceAuthMixin } from './methods/deviceAuth.js';
+import { DisclaimersMixin } from './methods/disclaimers.js';
+import { LabelsMixin } from './methods/labels.js';
+import { LandingMixin } from './methods/landing.js';
+import { LikesMixin } from './methods/likes.js';
+import { MetatagsMixin } from './methods/metatags.js';
+import { MusicHistoryMixin } from './methods/musicHistory.js';
+import { PinsMixin } from './methods/pins.js';
+import { PlaylistsMixin } from './methods/playlists.js';
+import { PresavesMixin } from './methods/presaves.js';
+import { QueueMixin } from './methods/queue.js';
+import { RadioMixin } from './methods/radio.js';
+import { SearchMixin } from './methods/search.js';
+import { TracksMixin } from './methods/tracks.js';
+import { RealtimeClient, type RealtimeOptions } from './ynison/realtime.js';
+import { UnauthorizedError } from './exceptions.js';
+
+/**
+ * The method groups layered onto {@link ClientBase}. Splitting them into mixins
+ * keeps each domain in its own file while preserving a single flat client API.
+ */
+const ComposedClient = AccountMixin(
+  TracksMixin(
+    SearchMixin(
+      AlbumsMixin(
+        ArtistsMixin(
+          PlaylistsMixin(
+            LandingMixin(
+              RadioMixin(
+                QueueMixin(
+                  MusicHistoryMixin(
+                    ConcertsMixin(
+                    ClipsMixin(
+                      CreditsMixin(
+                        DisclaimersMixin(
+                          LabelsMixin(
+                            MetatagsMixin(
+                              PinsMixin(
+                                PresavesMixin(LikesMixin(DeviceAuthMixin(ClientBase))),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
+
+/**
+ * Typed, async client for the Yandex Music API.
+ *
+ * @example
+ * ```ts
+ * import { Client } from '@dvxch/yandex-music';
+ *
+ * const client = await new Client({ token: process.env.YM_TOKEN }).init();
+ * const [track] = await client.tracks(2);
+ * console.log(track?.title);
+ *
+ * const [info] = await track!.getDownloadInfo();
+ * await info.download('track.mp3');
+ * ```
+ *
+ * @remarks
+ * Construct with an OAuth `token` and call {@link Client.init} once to load
+ * account information used by some endpoints. Supported response languages are
+ * `en`, `uz`, `uk`, `us`, `ru`, `kk` and `hy`.
+ */
+export class Client extends ComposedClient {
+  /**
+   * @param options - Client configuration (token, base URL, language, ...).
+   */
+  constructor(options: ClientOptions = {}) {
+    super(options);
+  }
+
+  /**
+   * Create a realtime ("now playing") client backed by Ynison.
+   *
+   * @remarks
+   * Realtime events are the only server-push channel Yandex Music offers — there
+   * are no HTTP webhooks. The returned {@link RealtimeClient} handles the
+   * handshake, keep-alive and reconnection; just subscribe and `start()`. By
+   * default `trackChange` events resolve the playing track via {@link Client.tracks}.
+   *
+   * Requires the optional `ws` package (`npm install ws`).
+   *
+   * @param options - Overrides for token, device identity and reconnection.
+   * @returns A new realtime client.
+   *
+   * @example
+   * ```ts
+   * const rt = client.realtime();
+   * rt.on('trackChange', ({ track }) => console.log('now playing:', track?.title));
+   * await rt.start();
+   * ```
+   */
+  realtime(options: Partial<RealtimeOptions> = {}): RealtimeClient {
+    const token = options.token ?? this.token;
+    if (!token) {
+      throw new UnauthorizedError('a token is required for the realtime API');
+    }
+    return new RealtimeClient({
+      resolveTrack: async (playableId) => {
+        const tracks = await this.tracks([playableId]);
+        return tracks[0] ?? null;
+      },
+      ...options,
+      token,
+    });
+  }
+}
+
+export type { ClientOptions } from './clientBase.js';
