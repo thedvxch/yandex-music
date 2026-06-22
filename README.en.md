@@ -72,6 +72,25 @@ console.log(await lyrics?.fetchLyrics());
   failures additionally derive from `NetworkError` (`BadRequestError`,
   `NotFoundError`, `TimedOutError`, `UnauthorizedError`).
 
+## Configuration
+
+Everything that identifies the client to the API is set through the constructor:
+
+```ts
+const client = new Client({
+  token: process.env.YM_TOKEN,
+  userAgent: 'my-app/1.0',                         // default: the library UA
+  headers: { 'X-Yandex-Music-Client': 'custom' },  // merged onto the defaults
+  device: 'os=Linux; model=my-app; ...',           // device descriptor for queues
+  language: 'en',                                   // response language
+  fetch: myFetch,                                   // custom transport (e.g. node-wreq)
+});
+```
+
+`userAgent` and `headers` apply only to the auto-built transport — pass them on
+your own `request` instead when you supply one. The realtime device identity is
+set separately via `client.realtime({ deviceInfo })`.
+
 ## Implemented endpoints
 
 | Domain      | Methods |

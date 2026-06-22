@@ -73,6 +73,25 @@ console.log(await lyrics?.fetchLyrics());
   дополнительно наследуют `NetworkError` (`BadRequestError`, `NotFoundError`,
   `TimedOutError`, `UnauthorizedError`).
 
+## Конфигурация
+
+Всё, чем клиент представляется API, задаётся через конструктор:
+
+```ts
+const client = new Client({
+  token: process.env.YM_TOKEN,
+  userAgent: 'my-app/1.0',                         // по умолчанию — UA библиотеки
+  headers: { 'X-Yandex-Music-Client': 'custom' },  // мержатся с дефолтными
+  device: 'os=Linux; model=my-app; ...',           // device-дескриптор для очередей
+  language: 'en',                                   // язык ответов
+  fetch: myFetch,                                   // свой транспорт (напр. node-wreq)
+});
+```
+
+`userAgent` и `headers` влияют только на автоматически создаваемый транспорт —
+если передаёшь свой `request`, задавай их прямо в нём. Идентичность устройства
+для realtime настраивается отдельно через `client.realtime({ deviceInfo })`.
+
 ## Реализованные эндпоинты
 
 | Домен       | Методы |

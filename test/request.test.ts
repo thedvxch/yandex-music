@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import {
   Client,
   DEFAULT_DEVICE,
+  USER_AGENT,
   Request,
   BadRequestError,
   NetworkError,
@@ -154,8 +155,24 @@ describe('Client option overrides', () => {
     expect(calls[0]!['X-Extra']).toBe('y');
   });
 
+  test('User-Agent falls back to the library default when not set', async () => {
+    const { calls, fetch } = capturing();
+    await new Client({ fetch }).request.get('http://x');
+    expect(calls[0]!['User-Agent']).toBe(USER_AGENT);
+  });
+
   test('device defaults to DEFAULT_DEVICE and is overridable', () => {
     expect(new Client().device).toBe(DEFAULT_DEVICE);
     expect(new Client({ device: 'os=Foo; model=Bar' }).device).toBe('os=Foo; model=Bar');
+  });
+
+  test('a pre-built request takes precedence over userAgent/headers options', async () => {
+    const { calls, fetch } = capturing();
+    const request = new Request({ fetch, userAgent: 'transport/9' });
+    // userAgent/headers on the Client are ignored when a request is supplied.
+    const client = new Client({ request, userAgent: 'ignored/1', headers: { 'X-Extra': 'no' } });
+    await client.request.get('http://x');
+    expect(calls[0]!['User-Agent']).toBe('transport/9');
+    expect(calls[0]!['X-Extra']).toBeUndefined();
   });
 });
