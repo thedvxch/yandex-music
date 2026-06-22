@@ -1,5 +1,7 @@
 node_modules/
 dist/
+docs/api/
 *.log
+*.tgz
 .DS_Store
 .env

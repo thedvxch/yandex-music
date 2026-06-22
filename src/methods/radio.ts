@@ -14,16 +14,16 @@ import type { Params } from '../request.js';
 /** Kind of feedback sent to the rotor while listening to a station. */
 export type RotorFeedbackType = 'radioStarted' | 'trackStarted' | 'trackFinished' | 'skip';
 
-/** Mood/energy preset accepted by {@link RadioMixin.rotorStationSettings2}. */
+/** Mood/energy preset accepted by `rotorStationSettings2`. */
 export type RotorMoodEnergy = 'fun' | 'active' | 'calm' | 'sad' | 'all';
 
-/** Diversity preset accepted by {@link RadioMixin.rotorStationSettings2}. */
+/** Diversity preset accepted by `rotorStationSettings2`. */
 export type RotorDiversity = 'favorite' | 'popular' | 'discover' | 'default';
 
-/** Language preset accepted by {@link RadioMixin.rotorStationSettings2}. */
+/** Language preset accepted by `rotorStationSettings2`. */
 export type RotorLanguage = 'not-russian' | 'russian' | 'any';
 
-/** Station type accepted by {@link RadioMixin.rotorStationSettings2}. */
+/** Station type accepted by `rotorStationSettings2`. */
 export type RotorStationType = 'rotor' | 'generative';
 
 /**

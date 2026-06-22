@@ -96,6 +96,7 @@ console.log(await lyrics?.fetchLyrics());
 npm run typecheck   # type-check src + tests
 npm test            # run the test suite (node:test)
 npm run build       # emit dist/ (ESM + .d.ts)
+npm run docs        # generate API docs (TypeDoc) into docs/api
 ```
 
 ## License

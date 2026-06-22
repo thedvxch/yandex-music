@@ -13,7 +13,7 @@ import { getSignRequest } from '../signRequest.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
-/** Parameters for reporting playback progress via {@link TracksMixin.playAudio}. */
+/** Parameters for reporting playback progress via `playAudio`. */
 export interface PlayAudioOptions {
   /** Track id. */
   trackId: string | number;

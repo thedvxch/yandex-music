@@ -39,11 +39,13 @@
     "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json",
     "test": "node --import tsx --test test/**/*.test.ts",
     "clean": "rm -rf dist",
+    "docs": "typedoc",
     "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "tsx": "^4.19.2",
+    "typedoc": "^0.28.19",
     "typescript": "^5.7.3"
   }
 }

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api",
+  "tsconfig": "tsconfig.build.json",
+  "excludeInternal": true,
+  "readme": "README.md",
+  "navigationLinks": {
+    "npm": "https://www.npmjs.com/package/@dvxch/yandex-music"
+  }
+}

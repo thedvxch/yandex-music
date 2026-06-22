@@ -22,7 +22,7 @@ const OAUTH_BASE_URL = 'https://oauth.yandex.ru';
 /** Callback invoked with the device code once it is issued. */
 export type OnCodeCallback = (code: DeviceCode) => void | Promise<void>;
 
-/** Options for the blocking {@link DeviceAuthMixin device flow}. */
+/** Options for the blocking device flow (see `deviceAuth`). */
 export interface DeviceAuthOptions {
   /** Override the polling interval in seconds (defaults to the server's hint). */
   pollInterval?: number;
@@ -87,7 +87,7 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
     /**
      * Poll once for the token of a pending device authorization.
      *
-     * @param deviceCode - The `deviceCode` from {@link DeviceAuthMethods.requestDeviceCode}.
+     * @param deviceCode - The `deviceCode` from `requestDeviceCode`.
      * @param clientId - OAuth client id.
      * @param clientSecret - OAuth client secret.
      * @returns The token, or `null` while the user has not yet confirmed.

@@ -15,7 +15,7 @@ import type { Params } from '../request.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
-/** Per-section item counts requested from {@link MetatagsMixin.metatag}. */
+/** Per-section item counts requested from `metatag`. */
 export interface MetatagOptions {
   tracksCount?: number;
   artistsCount?: number;
