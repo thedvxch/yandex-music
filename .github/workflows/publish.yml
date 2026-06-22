@@ -1,30 +1,36 @@
 name: Publish
 
-# Publishes to npm via OIDC Trusted Publishing — no NPM_TOKEN secret.
-# npm exchanges the workflow's short-lived OIDC token for publish rights and
-# attaches build provenance automatically. Set up the trusted publisher on
-# npmjs.com (Package → Settings → Trusted Publisher) pointing at this file.
+# Dispatch-driven release: bump the version in package.json, then run this
+# workflow from the Actions tab. It publishes to npm via OIDC Trusted Publishing
+# (no NPM_TOKEN, provenance is automatic) and then creates the matching GitHub
+# Release with auto-generated notes. Set up the trusted publisher on npmjs.com
+# (Package → Settings → Trusted Publisher) pointing at this file.
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch: # allow manual runs from the Actions tab
+  workflow_dispatch:
     inputs:
       npm_tag:
         description: "npm dist-tag (latest | beta | next | …)"
         required: false
         type: string
         default: "latest"
+      prerelease:
+        description: "Mark the GitHub release as a prerelease"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
-  id-token: write # required for OIDC trusted publishing
+  contents: write # create the GitHub Release + tag
+  id-token: write # OIDC trusted publishing
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so release notes can diff from the last tag
 
       - uses: actions/setup-node@v4
         with:
@@ -36,6 +42,17 @@ jobs:
 
       - run: npm ci
 
+      - id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       # prepublishOnly (clean + typecheck + test + build) runs here automatically.
-      # On a release event inputs.npm_tag is empty, so the expression defaults to "latest".
-      - run: npm publish --tag "${{ inputs.npm_tag || 'latest' }}"
+      - run: npm publish --tag "${{ inputs.npm_tag }}"
+
+      # Publish succeeded → tag the commit and cut a Release with generated notes.
+      - uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ steps.pkg.outputs.version }}
+          name: v${{ steps.pkg.outputs.version }}
+          generateReleaseNotes: true
+          prerelease: ${{ inputs.prerelease }}
+          skipIfReleaseExists: true
