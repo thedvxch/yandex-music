@@ -46,7 +46,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json",
-    "test": "node --import tsx --test test/**/*.test.ts",
+    "test": "node --import tsx --test test/*.test.ts",
     "clean": "rm -rf dist",
     "docs": "typedoc",
     "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build"
