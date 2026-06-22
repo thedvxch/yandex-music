@@ -26,4 +26,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run typecheck:examples
       - run: npm test
-      - run: npm run build
+      # tsdown (build tool) needs Node >= 22.18; the published bundle still runs on Node 20.
+      - if: matrix.node == 22
+        run: npm run build
