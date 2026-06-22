@@ -1,0 +1,66 @@
+/**
+ * yamuse — a typed, async TypeScript client for the Yandex Music API.
+ *
+ * @packageDocumentation
+ */
+
+// Client
+export { Client } from './client.js';
+export type { ClientOptions } from './client.js';
+export { ClientBase, DEFAULT_BASE_URL, DEFAULT_DEVICE } from './clientBase.js';
+export type { BatchObjectType } from './clientBase.js';
+
+// Transport
+export { Request, USER_AGENT, DEFAULT_TIMEOUT_MS, BASE_HEADERS } from './request.js';
+export type { Params, ParamValue, RequestInit } from './request.js';
+
+// Signing
+export { getSignRequest, convertTrackIdToNumber, DEFAULT_SIGN_KEY } from './signRequest.js';
+export type { Sign } from './signRequest.js';
+
+// Base model machinery
+export { YandexMusicModel, deList, isJsonObject, assign } from './base.js';
+export type { JSONObject, JSONValue, DeJson } from './types.js';
+
+// Exceptions
+export {
+  YandexMusicError,
+  UnauthorizedError,
+  InvalidBitrateError,
+  IdMissingError,
+  NetworkError,
+  BadRequestError,
+  NotFoundError,
+  TimedOutError,
+  DeviceAuthError,
+  YnisonError,
+} from './exceptions.js';
+
+// Models — common value objects
+export { Cover, CoverDerivedColors, Icon, Link, ContentRestrictions } from './models/common.js';
+export { Pager } from './models/pager.js';
+
+// Models — track
+export { Track } from './models/track/track.js';
+export {
+  Major,
+  Normalization,
+  PoetryLoverMatch,
+  LyricsInfo,
+  Fade,
+  SmartPreviewParams,
+  MetaData,
+  R128,
+  LyricsMajor,
+} from './models/track/nested.js';
+export { DownloadInfo, TrackLyrics, SimilarTracks, TrackFullInfo, TrackTrailer } from './models/track/extras.js';
+
+// Models — artist
+export { Artist, Counts, Ratings, Description } from './models/artist/artist.js';
+export { ArtistTracks } from './models/artist/artistTracks.js';
+
+// Models — album
+export { Album, Label, TrackPosition, Deprecation, AlbumActionButton } from './models/album/album.js';
+
+// Models — account
+export { Status, Account, PassportPhone } from './models/account/account.js';
