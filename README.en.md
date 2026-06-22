@@ -25,9 +25,8 @@ runtime dependencies** (it uses the built-in `fetch`).
 
 Every endpoint has been exercised against the live Yandex Music API with a real
 token; the few endpoints the server no longer fulfils for a regular account
-(e.g. legacy queue creation, rotor feedback) behave identically to the reference
-`yandex-music` Python library and surface a typed error rather than failing
-silently.
+(e.g. legacy queue creation, rotor feedback) surface a typed error rather than
+failing silently.
 
 ## Install
 
@@ -138,6 +137,12 @@ npm test            # run the test suite (node:test)
 npm run build       # emit dist/ (ESM + .d.ts)
 npm run docs        # generate API docs (TypeDoc) into docs/api
 ```
+
+## Acknowledgements
+
+Thanks to [MarshalX](https://github.com/MarshalX) for the
+[yandex-music](https://github.com/MarshalX/yandex-music-api) library — an
+invaluable map of the Yandex Music API.
 
 ## License
 
