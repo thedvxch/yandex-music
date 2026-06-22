@@ -8,6 +8,7 @@ import { deList, isJsonObject } from '../base.js';
 import { Queue, QueueItem } from '../models/queue/queue.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
+import type { JSONObject } from '../types.js';
 
 /** Header carrying the device descriptor for queue requests. */
 const DEVICE_HEADER = 'X-Yandex-Music-Device';
@@ -64,6 +65,21 @@ export function QueueMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       const url = `${this.baseUrl}/queues/${queueId}/update-position?currentIndex=${currentIndex}`;
       const result = await this.request.post(url, { isInteractive: String(false) });
       return isJsonObject(result) && result['status'] === 'ok';
+    }
+
+    /**
+     * Create a new playback queue.
+     *
+     * @param queue - The queue, as a JSON object or a pre-serialized JSON string.
+     * @param device - Device descriptor. Defaults to the client device.
+     * @returns The id of the created queue, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async queueCreate(queue: JSONObject | string, device?: string): Promise<string | null> {
+      this.request.headers[DEVICE_HEADER] = device ?? this.device;
+      const body = typeof queue === 'string' ? queue : JSON.stringify(queue);
+      const result = await this.request.post(`${this.baseUrl}/queues`, body);
+      return isJsonObject(result) && typeof result['id'] === 'string' ? result['id'] : null;
     }
   }
 

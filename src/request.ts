@@ -147,6 +147,20 @@ export class Request {
   }
 
   /**
+   * Perform a `POST` request with a JSON body and return the result.
+   *
+   * @param url - Absolute request URL.
+   * @param json - Object serialized as the JSON request body.
+   * @param timeout - Optional per-call timeout override (milliseconds).
+   * @returns The unwrapped `result` payload, or `undefined` for an empty body.
+   * @throws {YandexMusicError} On any transport or API error.
+   */
+  async postJson(url: string, json?: JSONValue, timeout?: number): Promise<JSONValue | undefined> {
+    const bytes = await this.requestWrapper('POST', url, { body: JSON.stringify(json ?? {}), json: true }, timeout);
+    return this.unwrap(bytes);
+  }
+
+  /**
    * Perform a `PUT` request with a JSON body and return the result.
    *
    * @param url - Absolute request URL.

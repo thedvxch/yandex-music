@@ -7,11 +7,12 @@ the Yandex Music HTTP API — not a transpile of any existing library. It target
 modern Node.js (≥ 20), ships ESM with full type declarations, and has **zero
 runtime dependencies** (it uses the built-in `fetch`).
 
-> Status: growing. Twelve domains — `account` / `tracks` / `albums` / `artists` /
-> `search` / `likes` / `playlists` / `device auth` / `landing` / `radio` /
-> `queue` / `history` — are implemented and tested, including playlist mutations,
-> dislikes and rotor feedback. The rest (ynison remote control, small domains)
-> are being added incrementally — see [Roadmap](#roadmap).
+> Status: the full HTTP API is covered — `account` / `tracks` / `albums` /
+> `artists` / `search` / `likes` / `playlists` / `device auth` / `landing` /
+> `radio` / `queue` / `history` / `clips` / `credits` / `disclaimers` / `labels`
+> / `metatags` / `pins` / `presaves` / `concerts` — all implemented and tested,
+> including playlist mutations, dislikes and rotor feedback. Only ynison
+> real-time remote control remains — see [Roadmap](#roadmap).
 
 ## Install
 
@@ -71,15 +72,21 @@ console.log(await lyrics?.fetchLyrics());
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow) |
 | landing     | `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`radioStarted`/`trackStarted`/`trackFinished`/`skip` shortcuts), `rotorStationSettings2` |
-| queue       | `queuesList`, `queue`, `queueUpdatePosition` |
-| history     | `musicHistory` |
+| queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |
+| history     | `musicHistory`, `musicHistoryItems` |
+| clips       | `clips`, `clipsWillLike` |
+| credits     | `tracksCredits`, `clipsCredits` |
+| disclaimers | `tracksDisclaimer`, `clipsDisclaimer`, `albumsDisclaimer`, `artistsDisclaimer` |
+| labels      | `label`, `labelAlbums`, `labelArtists` |
+| metatags    | `metatags`, `metatag`, `metatagAlbums`, `metatagArtists`, `metatagPlaylists` |
+| pins        | `pins`, `pin{Album,Artist,Playlist,Wave}`, `unpin{Album,Artist,Playlist,Wave}` |
+| presaves    | `usersPresaves`, `usersPresavesAdd`, `usersPresavesRemove` |
+| concerts    | `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
 
 ## Roadmap
 
 - ynison remote control (a dedicated WebSocket module, separate from this HTTP
   client) — wrapped in a friendly real-time event API
-- `feed`, `musicHistoryItems`, `queueCreate`
-- clips, concerts, credits, disclaimers, labels, metatags, pins, presaves
 - typed sub-models: `Status` (permissions/subscription/plus), block-entity
   variants, station settings/restrictions
 

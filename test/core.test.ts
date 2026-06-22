@@ -5,6 +5,11 @@ import {
   Artist,
   Best,
   BriefInfo,
+  Clip,
+  Concert,
+  Credits,
+  Metatags,
+  Pin,
   Client,
   Dashboard,
   DeviceCode,
@@ -289,6 +294,28 @@ test('Difference serializes insert and delete operations', () => {
   assert.deepEqual(JSON.parse(del), [{ op: 'delete', from: 1, to: 3 }]);
 });
 
+test('small-domain models parse their payloads', () => {
+  const clip = Clip.deJson({ clipId: 7, title: 'C', artists: [{ id: 1, name: 'A' }], explicit: true });
+  assert.equal(clip?.clipId, 7);
+  assert.equal(clip?.artists?.[0]?.name, 'A');
+
+  const credits = Credits.deJson({ credits: [{ title: 'Producer', value: 'Someone' }] });
+  assert.equal(credits?.credits?.[0]?.title, 'Producer');
+
+  const pin = Pin.deJson({ type: 'album_item', data: { id: 5, title: 'Album' } });
+  assert.equal(pin?.type, 'album_item');
+  assert.equal(pin?.data?.title, 'Album');
+
+  const concert = Concert.deJson({ id: 'c1', city: 'Moscow', minPrice: { value: 1000, currency: 'RUB' } });
+  assert.equal(concert?.city, 'Moscow');
+  assert.equal(concert?.minPrice?.value, 1000);
+
+  const metatags = Metatags.deJson({
+    trees: [{ title: 'Moods', navigationId: 'moods', leaves: [{ tag: 'happy', title: 'Happy' }] }],
+  });
+  assert.equal(metatags?.trees?.[0]?.leaves?.[0]?.tag, 'happy');
+});
+
 test('client exposes the new method surface', () => {
   const client = new Client({ token: 'x' });
   for (const method of [
@@ -321,6 +348,24 @@ test('client exposes the new method surface', () => {
     'queue',
     'queueUpdatePosition',
     'musicHistory',
+    'clips',
+    'clipsWillLike',
+    'tracksCredits',
+    'tracksDisclaimer',
+    'label',
+    'labelAlbums',
+    'metatags',
+    'metatag',
+    'pins',
+    'pinAlbum',
+    'unpinAlbum',
+    'usersPresaves',
+    'usersPresavesAdd',
+    'artistsConcerts',
+    'concertInfo',
+    'concertsFeed',
+    'queueCreate',
+    'musicHistoryItems',
   ]) {
     assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
   }

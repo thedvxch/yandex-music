@@ -136,6 +136,47 @@ export type {
 // Models — queue
 export { Queue, QueueItem, Context } from './models/queue/queue.js';
 
+// Models — concerts
+export {
+  Concert,
+  ConcertMinPrice,
+  ConcertCashback,
+  ConcertEventInfo,
+  ConcertDescription,
+  ArtistConcerts,
+  ConcertInfo,
+  ConcertFeed,
+  ConcertFeedItem,
+  ConcertFeedItemData,
+  ConcertLocation,
+  ConcertLocations,
+  ConcertTabConfig,
+  ConcertTabConfigData,
+  ConcertTabRange,
+  ConcertSkeleton,
+} from './models/concert/concert.js';
+
+// Models — clips / credits / disclaimers / labels / metatags / pins / presaves
+export { Clip, ClipsWillLike } from './models/clip.js';
+export { Credit, Credits } from './models/credit.js';
+export { Disclaimer, ForeignAgent } from './models/disclaimer.js';
+export { LabelAlbums, LabelArtists } from './models/label/labelExtras.js';
+export {
+  Metatags,
+  Metatag,
+  MetatagTree,
+  MetatagLeaf,
+  MetatagTitle,
+  MetatagSortByValue,
+  MetatagArtistEntry,
+  MetatagAlbums,
+  MetatagArtists,
+  MetatagPlaylists,
+} from './models/metatag/metatag.js';
+export type { MetatagOptions } from './methods/metatags.js';
+export { Pin, PinData, PinsList } from './models/pin.js';
+export { Presaves } from './models/presaves.js';
+
 // Models — music history
 export {
   MusicHistory,
@@ -146,3 +187,4 @@ export {
   MusicHistoryItemData,
   MusicHistoryItemId,
 } from './models/musicHistory/musicHistory.js';
+export type { MusicHistoryItemsQuery } from './methods/musicHistory.js';

@@ -7,11 +7,19 @@ import { ClientBase, type ClientOptions } from './clientBase.js';
 import { AccountMixin } from './methods/account.js';
 import { AlbumsMixin } from './methods/albums.js';
 import { ArtistsMixin } from './methods/artists.js';
+import { ClipsMixin } from './methods/clips.js';
+import { ConcertsMixin } from './methods/concerts.js';
+import { CreditsMixin } from './methods/credits.js';
 import { DeviceAuthMixin } from './methods/deviceAuth.js';
+import { DisclaimersMixin } from './methods/disclaimers.js';
+import { LabelsMixin } from './methods/labels.js';
 import { LandingMixin } from './methods/landing.js';
 import { LikesMixin } from './methods/likes.js';
+import { MetatagsMixin } from './methods/metatags.js';
 import { MusicHistoryMixin } from './methods/musicHistory.js';
+import { PinsMixin } from './methods/pins.js';
 import { PlaylistsMixin } from './methods/playlists.js';
+import { PresavesMixin } from './methods/presaves.js';
 import { QueueMixin } from './methods/queue.js';
 import { RadioMixin } from './methods/radio.js';
 import { SearchMixin } from './methods/search.js';
@@ -29,7 +37,25 @@ const ComposedClient = AccountMixin(
           PlaylistsMixin(
             LandingMixin(
               RadioMixin(
-                QueueMixin(MusicHistoryMixin(LikesMixin(DeviceAuthMixin(ClientBase)))),
+                QueueMixin(
+                  MusicHistoryMixin(
+                    ConcertsMixin(
+                    ClipsMixin(
+                      CreditsMixin(
+                        DisclaimersMixin(
+                          LabelsMixin(
+                            MetatagsMixin(
+                              PinsMixin(
+                                PresavesMixin(LikesMixin(DeviceAuthMixin(ClientBase))),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -44,7 +70,7 @@ const ComposedClient = AccountMixin(
  *
  * @example
  * ```ts
- * import { Client } from 'yamuse';
+ * import { Client } from '@dvxch/yandex-music';
  *
  * const client = await new Client({ token: process.env.YM_TOKEN }).init();
  * const [track] = await client.tracks(2);
