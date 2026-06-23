@@ -236,7 +236,7 @@ export type { MusicHistoryItemsQuery } from './methods/musicHistory.js';
 
 // Realtime — Ynison (requires the optional `ws` package)
 export { RealtimeClient, liveProgressMs } from './ynison/realtime.js';
-export type { RealtimeOptions, RealtimeEvents, TrackChangeEvent } from './ynison/realtime.js';
+export type { RealtimeOptions, RealtimeEvents, TrackChangeEvent, NowPlaying } from './ynison/realtime.js';
 export { YnisonClient, parseStateFrame, parseRedirectFrame } from './ynison/client.js';
 export type { YnisonState, RedirectResponse, StateListener, YnisonClientOptions } from './ynison/client.js';
 export {

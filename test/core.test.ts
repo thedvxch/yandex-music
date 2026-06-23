@@ -389,6 +389,53 @@ test('client.realtime returns an event emitter and validates token', () => {
   assert.throws(() => new Client().realtime());
 });
 
+test('realtime uses a stable device id and exposes a now-playing snapshot', async () => {
+  const rt = new RealtimeClient({ token: 'x' });
+  assert.match(rt.deviceIdValue, /^[0-9a-f]+$/);
+  assert.equal(rt.deviceIdValue, rt.deviceIdValue); // stable
+  assert.equal(rt.state, null);
+  assert.equal(rt.nowPlaying as unknown, null);
+  assert.equal(rt.liveProgressMs(), 0);
+  assert.equal(rt.lastStateAgeMs, null);
+
+  // an explicit device id is honoured verbatim
+  assert.equal(new RealtimeClient({ token: 'x', deviceId: 'dev-123' }).deviceIdValue, 'dev-123');
+
+  const state = parseStateFrame(
+    JSON.stringify({
+      player_state: {
+        status: {
+          paused: false,
+          duration_ms: '200000',
+          progress_ms: '1000',
+          playback_speed: 1,
+          version: { timestamp_ms: String(Date.now()) },
+        },
+        player_queue: {
+          current_playable_index: 0,
+          entity_id: '5:3',
+          entity_type: 'PLAYLIST',
+          playable_list: [{ playable_id: '777' }],
+        },
+      },
+    }),
+  );
+  // feed a frame as the socket would, without a live connection
+  await (rt as unknown as { handleState(s: typeof state): Promise<void> }).handleState(state);
+
+  const np = rt.nowPlaying;
+  if (np === null) {
+    throw new Error('expected a now-playing snapshot');
+  }
+  assert.equal(np.playableId, '777');
+  assert.equal(np.paused, false);
+  assert.equal(np.entityType, 'PLAYLIST');
+  assert.equal(np.durationMs, 200000);
+  assert.ok(np.progressMs >= 1000);
+  assert.equal(rt.state, state);
+  assert.ok((rt.lastStateAgeMs ?? Number.MAX_SAFE_INTEGER) < 5000);
+});
+
 test('client exposes the new method surface', () => {
   const client = new Client({ token: 'x' });
   for (const method of [
