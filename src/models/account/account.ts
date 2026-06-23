@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Permissions, Plus, Subscription } from './subscription.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -56,6 +56,10 @@ export class Account extends YandexMusicModel {
   hasInfoForAppMetrica?: boolean;
   /** Whether this is a child account. */
   child?: boolean;
+  /** Region code. */
+  regionCode?: string;
+  /** Whether the account is a non-owner family-plan member. */
+  nonOwnerFamilyMember?: boolean;
 
   /** @see {@link Account} */
   static deJson(raw: JSONValue | undefined, client?: Client): Account | null {
@@ -78,8 +82,11 @@ export class Account extends YandexMusicModel {
       'registeredAt',
       'hasInfoForAppMetrica',
       'child',
+      'regionCode',
+      'nonOwnerFamilyMember',
     ]);
     model.passportPhones = deList(PassportPhone.deJson, raw['passportPhones'], client);
+    reportUnknown(client, 'Account', raw, model);
     return model;
   }
 }
@@ -126,6 +133,10 @@ export class Status extends YandexMusicModel {
   pretrialActive?: boolean;
   /** User hash. */
   userhash?: string;
+  /** Masterhub payload (raw JSON, pending a typed model). */
+  masterhub?: JSONValue;
+  /** Whether the account has purchase options. */
+  hasOptions?: boolean;
 
   /** @see {@link Status} */
   static deJson(raw: JSONValue | undefined, client?: Client): Status | null {
@@ -147,11 +158,14 @@ export class Status extends YandexMusicModel {
       'experiment',
       'pretrialActive',
       'userhash',
+      'masterhub',
+      'hasOptions',
     ]);
     model.account = Account.deJson(raw['account'], client) ?? undefined;
     model.permissions = Permissions.deJson(raw['permissions'], client) ?? undefined;
     model.subscription = Subscription.deJson(raw['subscription'], client) ?? undefined;
     model.plus = Plus.deJson(raw['plus'], client) ?? undefined;
+    reportUnknown(client, 'Status', raw, model);
     return model;
   }
 }

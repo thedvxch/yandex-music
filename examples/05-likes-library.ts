@@ -26,9 +26,10 @@ for (const t of tracks) {
   console.log(`  ${t.title} — ${t.artists?.[0]?.name}`);
 }
 
-// Liked artists and albums come back as `Like` wrappers around the entity.
+// Liked artists come back as full `Artist` objects; liked albums as `Like`
+// wrappers (the albums endpoint returns only id + timestamp per entry).
 const artists = await client.usersLikesArtists();
-console.log(`Liked artists: ${artists.length}`, artists[0]?.artist?.name ? `(e.g. ${artists[0].artist.name})` : '');
+console.log(`Liked artists: ${artists.length}`, artists[0]?.name ? `(e.g. ${artists[0].name})` : '');
 const albums = await client.usersLikesAlbums();
 console.log(`Liked albums: ${albums.length}`);
 

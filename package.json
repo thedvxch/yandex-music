@@ -1,6 +1,6 @@
 {
   "name": "@dvxch/yandex-music",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Typed, async TypeScript client for the Yandex Music API",
   "keywords": [
     "yandex",

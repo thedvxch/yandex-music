@@ -7,7 +7,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Icon } from '../common.js';
 import { Track } from '../track/track.js';
 import type { Client } from '../../client.js';
@@ -207,6 +207,8 @@ export class StationResult extends YandexMusicModel {
   station?: Station;
   /** Station settings (free-form raw JSON). */
   settings?: JSONValue;
+  /** Newer station settings payload (free-form raw JSON). */
+  settings2?: JSONValue;
   /** Ad parameters. */
   adParams?: AdParams;
   /** Explanation text. */
@@ -226,9 +228,10 @@ export class StationResult extends YandexMusicModel {
       return null;
     }
     const model = new StationResult(client);
-    assign(model, raw, ['settings', 'explanation', 'prerolls', 'rupTitle', 'rupDescription', 'customName']);
+    assign(model, raw, ['settings', 'settings2', 'explanation', 'prerolls', 'rupTitle', 'rupDescription', 'customName']);
     model.station = Station.deJson(raw['station'], client) ?? undefined;
     model.adParams = AdParams.deJson(raw['adParams'], client) ?? undefined;
+    reportUnknown(client, 'StationResult', raw, model);
     return model;
   }
 }
@@ -285,6 +288,8 @@ export class StationTracksResult extends YandexMusicModel {
   batchId?: string;
   /** Whether the Halloween ("pumpkin") theme is active. */
   pumpkin?: boolean;
+  /** Radio session id, used for rotor feedback. */
+  radioSessionId?: string;
 
   /** @see {@link StationTracksResult} */
   static deJson(raw: JSONValue | undefined, client?: Client): StationTracksResult | null {
@@ -292,9 +297,10 @@ export class StationTracksResult extends YandexMusicModel {
       return null;
     }
     const model = new StationTracksResult(client);
-    assign(model, raw, ['batchId', 'pumpkin']);
+    assign(model, raw, ['batchId', 'pumpkin', 'radioSessionId']);
     model.id = Id.deJson(raw['id'], client) ?? undefined;
     model.sequence = deList(Sequence.deJson, raw['sequence'], client);
+    reportUnknown(client, 'StationTracksResult', raw, model);
     return model;
   }
 }

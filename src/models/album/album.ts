@@ -3,8 +3,10 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
-import { Link } from '../common.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { Cover, CoverDerivedColors, Link } from '../common.js';
+import { Pager } from '../pager.js';
+import { CustomWave } from '../playlist/promo.js';
 import { Artist } from '../artist/artist.js';
 import { Track } from '../track/track.js';
 import type { Client } from '../../client.js';
@@ -121,6 +123,34 @@ export class Album extends YandexMusicModel {
   version?: string;
   /** Cover URI template. */
   coverUri?: string;
+  /** Structured cover descriptor. */
+  cover?: Cover;
+  /** Whether the album has a trailer. */
+  hasTrailer?: boolean;
+  /** Options the album is available for. */
+  availableForOptions?: string[];
+  /** Whether the user finished listening (audiobooks/podcasts). */
+  listeningFinished?: boolean;
+  /** Regions where the album is available. */
+  availableRegions?: string[];
+  /** Metatag id the album is grouped under. */
+  metaTagId?: string;
+  /** Sort order applied to the track list (with-tracks endpoint). */
+  sortOrder?: string;
+  /** Background image URI template. */
+  backgroundImageUrl?: string;
+  /** Whether the album is child-friendly content. */
+  childContent?: boolean;
+  /** Colors derived from the cover image. */
+  derivedColors?: CoverDerivedColors;
+  /** Custom wave (radio) descriptor. */
+  customWave?: CustomWave;
+  /** Duplicate albums (other editions of the same release). */
+  duplicates?: Album[];
+  /** Pagination metadata for the track list (with-tracks endpoint). */
+  pager?: Pager;
+  /** Album trailer (free-form raw JSON, pending a typed model). */
+  trailer?: JSONValue;
   /** Explicit/content warning marker. */
   contentWarning?: string;
   /** Genre. */
@@ -226,15 +256,30 @@ export class Album extends YandexMusicModel {
       'startDate',
       'likesCount',
       'disclaimers',
+      'hasTrailer',
+      'availableForOptions',
+      'listeningFinished',
+      'availableRegions',
+      'metaTagId',
+      'sortOrder',
+      'backgroundImageUrl',
+      'childContent',
+      'trailer',
     ]);
     model.artists = deList(Artist.deJson, raw['artists'], client);
     model.labels = Album.deLabels(raw['labels'], client);
+    model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
+    model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
+    model.customWave = CustomWave.deJson(raw['customWave'], client) ?? undefined;
+    model.pager = Pager.deJson(raw['pager'], client) ?? undefined;
+    model.duplicates = raw['duplicates'] ? deList(Album.deJson, raw['duplicates'], client) : undefined;
     model.trackPosition = TrackPosition.deJson(raw['trackPosition'], client) ?? undefined;
     model.deprecation = Deprecation.deJson(raw['deprecation'], client) ?? undefined;
     model.actionButton = AlbumActionButton.deJson(raw['actionButton'], client) ?? undefined;
     if (Array.isArray(raw['volumes'])) {
       model.volumes = raw['volumes'].map((volume) => deList(Track.deJson, volume, client));
     }
+    reportUnknown(client, 'Album', raw, model);
     return model;
   }
 

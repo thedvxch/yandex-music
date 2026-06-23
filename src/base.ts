@@ -45,6 +45,46 @@ export function deList<T>(deJson: DeJson<T>, data: JSONValue | undefined, client
 }
 
 /**
+ * When the owning client has `reportUnknownFields` enabled, warn about keys the
+ * API returned that the finished model did not map.
+ *
+ * Called at the end of a `deJson` once every field (scalar and nested) is
+ * assigned: any raw key without a matching own-property on the model is unmapped.
+ * This relies on the library's verbatim camelCase mapping (model field names
+ * equal API keys), which holds throughout. Opt-in and side-effect-free unless the
+ * flag is set, so it is safe to leave wired into every model.
+ *
+ * @param client - The owning client (carries the `reportUnknownFields` flag).
+ * @param label - Model name, used in the warning.
+ * @param raw - The raw JSON object the model was built from.
+ * @param model - The finished model instance.
+ * @param alsoKnown - Raw keys consumed under a different model field name (for
+ *   example a snake_case API key mapped to a camelCase field); not reported.
+ */
+export function reportUnknown(
+  client: Client | undefined,
+  label: string,
+  raw: JSONObject,
+  model: object,
+  alsoKnown?: readonly string[],
+): void {
+  if (!client?.reportUnknownFields) {
+    return;
+  }
+  const known = new Set(Object.keys(model));
+  if (alsoKnown) {
+    for (const key of alsoKnown) {
+      known.add(key);
+    }
+  }
+  const unknown = Object.keys(raw).filter((key) => !known.has(key));
+  if (unknown.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(`[yandex-music] ${label}: API returned unmapped field(s): ${unknown.join(', ')}`);
+  }
+}
+
+/**
  * Copy a set of scalar fields straight from a raw JSON object onto a model.
  *
  * The API already returns keys in camelCase, matching the library's field names,

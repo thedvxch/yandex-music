@@ -320,29 +320,33 @@ export class Request {
       headers['Content-Type'] = 'application/json';
     }
 
-    let response: ResponseLike;
     try {
-      response = await this.fetchImpl(url, {
+      const response = await this.fetchImpl(url, {
         method,
         headers,
         body: body?.body,
         signal: controller.signal,
       });
+      // Read the body under the same deadline: the timeout must cover the full
+      // download, not just the headers — a stalled body stream (broken pipe with
+      // no RST) would otherwise hang forever.
+      const content = new Uint8Array(await response.arrayBuffer());
+      if (response.status >= 200 && response.status <= 299) {
+        return content;
+      }
+      this.handleErrorResponse(response.status, content);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new TimedOutError();
+      }
+      // Typed API errors (from handleErrorResponse) must propagate unchanged.
+      if (error instanceof YandexMusicError) {
+        throw error;
       }
       throw new NetworkError(error instanceof Error ? error.message : String(error), { cause: error });
     } finally {
       clearTimeout(timer);
     }
-
-    const content = new Uint8Array(await response.arrayBuffer());
-    if (response.status >= 200 && response.status <= 299) {
-      return content;
-    }
-
-    this.handleErrorResponse(response.status, content);
   }
 
   private parseBody(bytes: Uint8Array): Envelope {

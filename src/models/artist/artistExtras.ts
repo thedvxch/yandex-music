@@ -5,13 +5,15 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Cover } from '../common.js';
 import { Track } from '../track/track.js';
 import { Album } from '../album/album.js';
 import { Video } from '../video.js';
+import { Clip } from '../clip.js';
 import { Playlist } from '../playlist/playlist.js';
 import { PlaylistId } from '../playlist/playlistId.js';
+import { CustomWave } from '../playlist/promo.js';
 import { Chart } from '../landing/landing.js';
 import { TrailerInfo } from '../trailerInfo.js';
 import { Pager } from '../pager.js';
@@ -152,6 +154,16 @@ export class BriefInfo extends YandexMusicModel {
   stats?: Stats;
   /** The artist's tracks that currently chart. */
   tracksInChart?: Chart[];
+  /** Bandlink scanner (smartlink) URL for the artist. */
+  bandlinkScannerLink?: string;
+  /** The artist's clips (short videos). */
+  clips?: Clip[];
+  /** Extra page actions (raw JSON, pending a typed model). */
+  extraActions?: JSONValue;
+  /** The artist's custom wave (radio) descriptor. */
+  customWave?: CustomWave;
+  /** Whether the artist has a trailer. */
+  hasTrailer?: boolean;
 
   /** @see {@link BriefInfo} */
   static deJson(raw: JSONValue | undefined, client?: Client): BriefInfo | null {
@@ -159,7 +171,7 @@ export class BriefInfo extends YandexMusicModel {
       return null;
     }
     const model = new BriefInfo(client);
-    assign(model, raw, ['lastReleaseIds', 'concerts', 'hasPromotions']);
+    assign(model, raw, ['lastReleaseIds', 'concerts', 'hasPromotions', 'bandlinkScannerLink', 'extraActions', 'hasTrailer']);
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.albums = deList(Album.deJson, raw['albums'], client);
     model.playlists = deList(Playlist.deJson, raw['playlists'], client);
@@ -172,7 +184,10 @@ export class BriefInfo extends YandexMusicModel {
     model.vinyls = deList(Vinyl.deJson, raw['vinyls'], client);
     model.playlistIds = deList(PlaylistId.deJson, raw['playlistIds'], client);
     model.tracksInChart = deList(Chart.deJson, raw['tracksInChart'], client);
+    model.clips = deList(Clip.deJson, raw['clips'], client);
     model.stats = Stats.deJson(raw['stats'], client) ?? undefined;
+    model.customWave = CustomWave.deJson(raw['customWave'], client) ?? undefined;
+    reportUnknown(client, 'BriefInfo', raw, model);
     return model;
   }
 }

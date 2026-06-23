@@ -5,7 +5,7 @@
  */
 import { createHash, createDecipheriv } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { LyricsMajor } from './nested.js';
 import { Track } from './track.js';
 import { Artist } from '../artist/artist.js';
@@ -316,6 +316,8 @@ export class TrackFullInfo extends YandexMusicModel {
   aliases?: string[];
   /** Related artists. */
   artists?: Artist[];
+  /** Other versions of the track, keyed by version label (e.g. `live`, `remix`). */
+  otherVersions?: Record<string, Track[]>;
 
   /** @see {@link TrackFullInfo} */
   static deJson(raw: JSONValue | undefined, client?: Client): TrackFullInfo | null {
@@ -328,6 +330,14 @@ export class TrackFullInfo extends YandexMusicModel {
     model.similarTracks = raw['similarTracks'] ? deList(Track.deJson, raw['similarTracks'], client) : undefined;
     model.alsoInAlbums = raw['alsoInAlbums'] ? deList(Track.deJson, raw['alsoInAlbums'], client) : undefined;
     model.artists = raw['artists'] ? deList(Artist.deJson, raw['artists'], client) : undefined;
+    if (isJsonObject(raw['otherVersions'])) {
+      const versions: Record<string, Track[]> = {};
+      for (const [label, list] of Object.entries(raw['otherVersions'])) {
+        versions[label] = deList(Track.deJson, list, client);
+      }
+      model.otherVersions = versions;
+    }
+    reportUnknown(client, 'TrackFullInfo', raw, model);
     return model;
   }
 }

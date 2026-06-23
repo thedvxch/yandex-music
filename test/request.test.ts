@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
+  Artist,
   Client,
   DEFAULT_DEVICE,
   USER_AGENT,
@@ -214,5 +215,26 @@ describe('refreshAccessToken (OAuth refresh grant)', () => {
       arrayBuffer: async () => new TextEncoder().encode(JSON.stringify({ error: 'invalid_grant' })).buffer,
     });
     await expect(new Client({ fetch }).refreshAccessToken('bad')).rejects.toThrow(DeviceAuthError);
+  });
+});
+
+describe('likes return shapes', () => {
+  test('usersLikesArtists returns full Artist[] (the endpoint sends bare artists, not Like wrappers)', async () => {
+    const body = JSON.stringify({
+      result: [
+        { id: '1', name: 'Polly', cover: { type: 'pic', uri: 'x/%%' }, genres: ['rock'] },
+        { id: '2', name: 'Other' },
+      ],
+    });
+    const fetchImpl: FetchLike = async () => ({
+      status: 200,
+      arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+    });
+    const client = new Client({ token: 't', fetch: fetchImpl });
+    const artists = await client.usersLikesArtists(123);
+    expect(artists).toHaveLength(2);
+    expect(artists[0]).toBeInstanceOf(Artist);
+    expect(artists[0]!.name).toBe('Polly');
+    expect(artists[0]!.genres).toEqual(['rock']);
   });
 });

@@ -5,6 +5,8 @@ import {
   Artist,
   Best,
   BriefInfo,
+  Cover,
+  reportUnknown,
   Clip,
   Concert,
   Credits,
@@ -490,5 +492,68 @@ test('client exposes the new method surface', () => {
     'realtime',
   ]) {
     assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
+  }
+});
+
+test('Track.deJson maps r128 and podcast-episode fields (drift regression)', () => {
+  const track = Track.deJson({
+    id: 1,
+    title: 'Episode',
+    r128: { i: -9.44, tp: 0.29 },
+    podcastEpisodeType: 'regular',
+    pubDate: '2024-01-02T00:00:00Z',
+  });
+  assert.ok(track);
+  assert.equal(track.r128?.i, -9.44);
+  assert.equal(track.r128?.tp, 0.29);
+  assert.equal(track.podcastEpisodeType, 'regular');
+  assert.equal(track.pubDate, '2024-01-02T00:00:00Z');
+});
+
+test('Album.deJson maps the structured cover and listeningFinished (drift regression)', () => {
+  const album = Album.deJson({
+    id: 9,
+    title: 'A',
+    cover: { type: 'pic', uri: 'avatars/%%' },
+    listeningFinished: true,
+    availableRegions: ['RU', 'BY'],
+    hasTrailer: false,
+  });
+  assert.ok(album);
+  assert.ok(album.cover instanceof Cover);
+  assert.equal(album.cover?.uri, 'avatars/%%');
+  assert.equal(album.listeningFinished, true);
+  assert.deepEqual(album.availableRegions, ['RU', 'BY']);
+});
+
+test('Search.deJson reads the snake_case podcast_episodes key and clips (bug regression)', () => {
+  const search = Search.deJson({
+    text: 'q',
+    podcast_episodes: { type: 'podcast_episode', total: 1, results: [{ id: 5, title: 'Ep' }] },
+    clips: { type: 'clip', total: 1, results: [{ id: 'c1' }] },
+  });
+  assert.ok(search);
+  assert.equal(search.podcastEpisodes?.total, 1);
+  assert.ok(search.podcastEpisodes?.results?.[0] instanceof Track);
+  assert.equal(search.podcastEpisodes?.results?.[0]?.title, 'Ep');
+  assert.ok(search.clips?.results?.[0] instanceof Clip);
+});
+
+test('reportUnknown warns only when the client opts in', () => {
+  const warnings: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => void warnings.push(args.join(' '));
+  try {
+    // Off by default: silent even with unmapped keys.
+    reportUnknown(undefined, 'X', { a: 1, surprise: 2 }, { a: 1 });
+    reportUnknown({ reportUnknownFields: false } as never, 'X', { surprise: 2 }, {});
+    assert.equal(warnings.length, 0);
+    // On: reports the unmapped key, but respects the alsoKnown allowlist.
+    reportUnknown({ reportUnknownFields: true } as never, 'Track', { a: 1, surprise: 2 }, { a: 1 });
+    reportUnknown({ reportUnknownFields: true } as never, 'Search', { podcast_episodes: 1 }, {}, ['podcast_episodes']);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /Track: API returned unmapped field\(s\): surprise/);
+  } finally {
+    console.warn = original;
   }
 });

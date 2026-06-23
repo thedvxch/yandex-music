@@ -26,7 +26,7 @@ export {
 export type { Sign, FileInfoSign } from './signRequest.js';
 
 // Base model machinery
-export { YandexMusicModel, deList, isJsonObject, assign } from './base.js';
+export { YandexMusicModel, deList, isJsonObject, assign, reportUnknown } from './base.js';
 export type { JSONObject, JSONValue, DeJson } from './types.js';
 
 // Exceptions

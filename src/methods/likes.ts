@@ -6,6 +6,7 @@
 import { ClientBase } from '../clientBase.js';
 import { deList, isJsonObject } from '../base.js';
 import { Like, TracksList } from '../models/like.js';
+import { Artist } from '../models/artist/artist.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -217,14 +218,16 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
     /**
      * Fetch the user's liked artists.
      *
+     * @remarks The endpoint returns full artist objects (not like wrappers), so
+     * the result is {@link Artist}[].
      * @param userId - Target user id. Defaults to the authenticated account.
      * @returns The liked artists.
      * @throws {YandexMusicError} On any transport or API error.
      */
-    async usersLikesArtists(userId?: string | number): Promise<Like[]> {
+    async usersLikesArtists(userId?: string | number): Promise<Artist[]> {
       const uid = userId ?? this.accountUid;
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/artists`);
-      return deList(Like.deJson, result, this as unknown as Client);
+      return deList(Artist.deJson, result, this as unknown as Client);
     }
 
     /**
@@ -285,14 +288,16 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
     /**
      * Fetch the user's disliked artists.
      *
+     * @remarks The endpoint returns full artist objects (not like wrappers), so
+     * the result is {@link Artist}[].
      * @param userId - Target user id. Defaults to the authenticated account.
      * @returns The disliked artists.
      * @throws {YandexMusicError} On any transport or API error.
      */
-    async usersDislikesArtists(userId?: string | number): Promise<Like[]> {
+    async usersDislikesArtists(userId?: string | number): Promise<Artist[]> {
       const uid = userId ?? this.accountUid;
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/dislikes/artists`);
-      return deList(Like.deJson, result, this as unknown as Client);
+      return deList(Artist.deJson, result, this as unknown as Client);
     }
 
     /**

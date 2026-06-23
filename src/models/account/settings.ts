@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../../base.js';
 import { Status } from './account.js';
 import type { Client } from '../../client.js';
 import type { JSONObject, JSONValue } from '../../types.js';
@@ -44,6 +44,16 @@ export class UserSettings extends YandexMusicModel {
   diskEnabled?: boolean;
   /** Whether Disk tracks appear in the library. */
   showDiskTracksInLibrary?: boolean;
+  /** Whether explicit content is forbidden for the account. */
+  explicitForbidden?: boolean;
+  /** Whether child mode is enabled. */
+  childModEnabled?: boolean;
+  /** Whether the onboarding wizard has been completed. */
+  wizardIsPassed?: boolean;
+  /** Library accent hue chosen by the user. */
+  userCollectionHue?: string;
+  /** Whether child mode was changed by the user. */
+  childModeChangedByUser?: boolean;
 
   /** @see {@link UserSettings} */
   static deJson(raw: JSONValue | undefined, client?: Client): UserSettings | null {
@@ -69,7 +79,13 @@ export class UserSettings extends YandexMusicModel {
       'adsDisabled',
       'diskEnabled',
       'showDiskTracksInLibrary',
+      'explicitForbidden',
+      'childModEnabled',
+      'wizardIsPassed',
+      'userCollectionHue',
+      'childModeChangedByUser',
     ]);
+    reportUnknown(client, 'UserSettings', raw, model);
     return model;
   }
 }

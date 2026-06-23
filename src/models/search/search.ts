@@ -3,18 +3,19 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Album } from '../album/album.js';
 import { Artist } from '../artist/artist.js';
 import { Track } from '../track/track.js';
 import { Video } from '../video.js';
 import { User } from '../user.js';
 import { Playlist } from '../playlist/playlist.js';
+import { Clip } from '../clip.js';
 import type { Client } from '../../client.js';
 import type { DeJson, JSONValue } from '../../types.js';
 
 /** Any entity that can be a search result or a "best match". */
-export type SearchEntity = Track | Artist | Album | Playlist | Video | User;
+export type SearchEntity = Track | Artist | Album | Playlist | Video | User | Clip;
 
 /** Maps an API result `type` to the model deserializer that handles it. */
 const TYPE_TO_DEJSON: Record<string, DeJson<SearchEntity>> = {
@@ -26,6 +27,7 @@ const TYPE_TO_DEJSON: Record<string, DeJson<SearchEntity>> = {
   user: User.deJson,
   podcast: Album.deJson,
   podcast_episode: Track.deJson,
+  clip: Clip.deJson,
 };
 
 /**
@@ -139,6 +141,8 @@ export class Search extends YandexMusicModel {
   podcasts?: SearchResult<Album>;
   /** Matching podcast episodes (modeled as tracks). */
   podcastEpisodes?: SearchResult<Track>;
+  /** Matching clips (short videos). */
+  clips?: SearchResult<Clip>;
   /** Result type filter that was applied. */
   type?: string;
   /** Page index. */
@@ -179,8 +183,11 @@ export class Search extends YandexMusicModel {
     model.videos = SearchResult.deJson(raw['videos'], client, Video.deJson, 'video') ?? undefined;
     model.users = SearchResult.deJson(raw['users'], client, User.deJson, 'user') ?? undefined;
     model.podcasts = SearchResult.deJson(raw['podcasts'], client, Album.deJson, 'podcast') ?? undefined;
+    // API key is snake_case here (`podcast_episodes`), unlike the rest of the response.
     model.podcastEpisodes =
-      SearchResult.deJson(raw['podcastEpisodes'], client, Track.deJson, 'podcast_episode') ?? undefined;
+      SearchResult.deJson(raw['podcast_episodes'], client, Track.deJson, 'podcast_episode') ?? undefined;
+    model.clips = SearchResult.deJson(raw['clips'], client, Clip.deJson, 'clip') ?? undefined;
+    reportUnknown(client, 'Search', raw, model, ['podcast_episodes']);
     return model;
   }
 }

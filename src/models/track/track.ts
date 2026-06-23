@@ -3,9 +3,9 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { CoverDerivedColors } from '../common.js';
-import { Fade, LyricsInfo, Major, MetaData, Normalization, PoetryLoverMatch, SmartPreviewParams } from './nested.js';
+import { Fade, LyricsInfo, Major, MetaData, Normalization, PoetryLoverMatch, R128, SmartPreviewParams } from './nested.js';
 // Value imports despite the import cycle (track ↔ artist ↔ album): the cyclic
 // bindings are only dereferenced inside method bodies, never at module load, so
 // ES module evaluation order is safe.
@@ -118,6 +118,12 @@ export class Track extends YandexMusicModel {
   backgroundVideoId?: string;
   /** Player identifier. */
   playerId?: string;
+  /** EBU R128 loudness measurements. */
+  r128?: R128;
+  /** Podcast episode kind (podcast episodes only). */
+  podcastEpisodeType?: string;
+  /** Publication date (podcast episodes only, ISO 8601). */
+  pubDate?: string;
 
   /**
    * Deserialize a {@link Track}.
@@ -168,6 +174,8 @@ export class Track extends YandexMusicModel {
       'disclaimers',
       'backgroundVideoId',
       'playerId',
+      'podcastEpisodeType',
+      'pubDate',
     ]);
     model.artists = deList(Artist.deJson, raw['artists'], client);
     model.albums = deList(Album.deJson, raw['albums'], client);
@@ -181,6 +189,8 @@ export class Track extends YandexMusicModel {
     model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
     model.fade = Fade.deJson(raw['fade'], client) ?? undefined;
     model.smartPreviewParams = SmartPreviewParams.deJson(raw['smartPreviewParams'], client) ?? undefined;
+    model.r128 = R128.deJson(raw['r128'], client) ?? undefined;
+    reportUnknown(client, 'Track', raw, model);
     return model;
   }
 

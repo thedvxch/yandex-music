@@ -3,8 +3,8 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
-import { Cover } from '../common.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { Cover, CoverDerivedColors } from '../common.js';
 import { Pager } from '../pager.js';
 import { User } from '../user.js';
 import { TrackId, TrackShort } from '../trackShort.js';
@@ -136,6 +136,12 @@ export class Playlist extends YandexMusicModel {
   backgroundVideoId?: string;
   /** Background image URL. */
   backgroundImageUrl?: string;
+  /** Colors derived from the cover image. */
+  derivedColors?: CoverDerivedColors;
+  /** Regions where the playlist is available. */
+  regions?: JSONValue[];
+  /** Artist-playlist kind, when this is an artist's playlist. */
+  artistPlaylistType?: string;
 
   /** @see {@link Playlist} */
   static deJson(raw: JSONValue | undefined, client?: Client): Playlist | null {
@@ -182,6 +188,8 @@ export class Playlist extends YandexMusicModel {
       'backgroundVideoUrl',
       'backgroundVideoId',
       'backgroundImageUrl',
+      'regions',
+      'artistPlaylistType',
     ]);
     model.owner = User.deJson(raw['owner'], client) ?? undefined;
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
@@ -200,6 +208,8 @@ export class Playlist extends YandexMusicModel {
     model.tracks = deList(TrackShort.deJson, raw['tracks'], client);
     model.similarPlaylists = deList(Playlist.deJson, raw['similarPlaylists'], client);
     model.lastOwnerPlaylists = deList(Playlist.deJson, raw['lastOwnerPlaylists'], client);
+    model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
+    reportUnknown(client, 'Playlist', raw, model);
     return model;
   }
 }
