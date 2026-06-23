@@ -103,7 +103,7 @@ const client = new Client({
 | search      | `search`, `searchSuggest` |
 | likes       | `usersLikesTracks` + add/remove для треков, артистов, альбомов, плейлистов; `usersDislikesTracks`/`Artists` + add/remove |
 | playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
-| device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (блокирующий flow) |
+| device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (блокирующий flow), `refreshAccessToken` (обновление по refresh-токену) |
 | landing     | `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+ шорткаты `radioStarted`/`trackStarted`/`trackFinished`/`skip`), `rotorStationSettings2` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |

@@ -457,6 +457,7 @@ test('client exposes the new method surface', () => {
     'artistsTrackIds',
     'requestDeviceCode',
     'deviceAuth',
+    'refreshAccessToken',
     'landing',
     'chart',
     'genres',

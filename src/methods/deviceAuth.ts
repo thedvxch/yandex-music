@@ -116,6 +116,44 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
     }
 
     /**
+     * Exchange a refresh token for a fresh access token (OAuth `refresh_token` grant).
+     *
+     * Device-flow tokens expire; persist {@link OAuthToken.refreshToken} from
+     * {@link deviceAuth} and call this to renew the access token without a new
+     * login. The response usually rotates the refresh token too — store the new
+     * one from the returned {@link OAuthToken}.
+     *
+     * @param refreshToken - The stored refresh token.
+     * @param clientId - OAuth client id. Defaults to the Android app's id.
+     * @param clientSecret - OAuth client secret. Defaults to the Android app's secret.
+     * @returns The refreshed {@link OAuthToken}.
+     * @throws {DeviceAuthError} When the grant is rejected or the response cannot be parsed.
+     * @throws {YandexMusicError} On any transport error.
+     */
+    async refreshAccessToken(
+      refreshToken: string,
+      clientId?: string,
+      clientSecret?: string,
+    ): Promise<OAuthToken> {
+      let token: OAuthToken | null;
+      try {
+        const result = await this.request.post(`${OAUTH_BASE_URL}/token`, {
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: clientId ?? DEFAULT_CLIENT_ID,
+          client_secret: clientSecret ?? DEFAULT_CLIENT_SECRET,
+        });
+        token = OAuthToken.deJson(result, this as unknown as Client);
+      } catch (error) {
+        throw error instanceof BadRequestError ? new DeviceAuthError(error.message) : error;
+      }
+      if (!token?.accessToken) {
+        throw new DeviceAuthError('failed to parse refresh token response');
+      }
+      return token;
+    }
+
+    /**
      * Run the full blocking device flow: request a code, surface it through
      * `onCode`, then poll until the user confirms and a token is returned.
      *

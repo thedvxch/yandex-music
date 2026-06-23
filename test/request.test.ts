@@ -5,6 +5,7 @@ import {
   USER_AGENT,
   Request,
   BadRequestError,
+  DeviceAuthError,
   NetworkError,
   NotFoundError,
   TimedOutError,
@@ -174,5 +175,44 @@ describe('Client option overrides', () => {
     await client.request.get('http://x');
     expect(calls[0]!['User-Agent']).toBe('transport/9');
     expect(calls[0]!['X-Extra']).toBeUndefined();
+  });
+});
+
+describe('refreshAccessToken (OAuth refresh grant)', () => {
+  function capturingBody(body: string): { sent: { url: string; body: string }[]; fetch: FetchLike } {
+    const sent: { url: string; body: string }[] = [];
+    const fetch: FetchLike = async (url, init) => {
+      sent.push({ url, body: String(init.body ?? '') });
+      return { status: 200, arrayBuffer: async () => new TextEncoder().encode(body).buffer };
+    };
+    return { sent, fetch };
+  }
+
+  test('posts the refresh grant and parses the token', async () => {
+    const { sent, fetch } = capturingBody(
+      JSON.stringify({ access_token: 'new-acc', refresh_token: 'new-ref', expires_in: 31_536_000 }),
+    );
+    const token = await new Client({ fetch }).refreshAccessToken('old-ref');
+    expect(token.accessToken).toBe('new-acc');
+    expect(token.refreshToken).toBe('new-ref');
+    expect(token.expiresIn).toBe(31_536_000);
+    expect(sent[0]!.url).toMatch(/oauth\.yandex\.ru\/token$/);
+    expect(sent[0]!.body).toContain('grant_type=refresh_token');
+    expect(sent[0]!.body).toContain('refresh_token=old-ref');
+  });
+
+  test('custom client credentials are forwarded', async () => {
+    const { sent, fetch } = capturingBody(JSON.stringify({ access_token: 'a' }));
+    await new Client({ fetch }).refreshAccessToken('r', 'my-id', 'my-secret');
+    expect(sent[0]!.body).toContain('client_id=my-id');
+    expect(sent[0]!.body).toContain('client_secret=my-secret');
+  });
+
+  test('a rejected grant surfaces as DeviceAuthError', async () => {
+    const fetch: FetchLike = async () => ({
+      status: 400,
+      arrayBuffer: async () => new TextEncoder().encode(JSON.stringify({ error: 'invalid_grant' })).buffer,
+    });
+    await expect(new Client({ fetch }).refreshAccessToken('bad')).rejects.toThrow(DeviceAuthError);
   });
 });
