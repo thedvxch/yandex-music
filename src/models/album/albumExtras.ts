@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Artist } from '../artist/artist.js';
 import { Album } from './album.js';
 import { TrailerInfo } from '../trailerInfo.js';
@@ -28,6 +28,7 @@ export class AlbumTrailer extends YandexMusicModel {
     model.album = Album.deJson(raw['album'], client) ?? undefined;
     model.artists = raw['artists'] ? deList(Artist.deJson, raw['artists'], client) : undefined;
     model.trailer = TrailerInfo.deJson(raw['trailer'], client) ?? undefined;
+    reportUnknown(client, 'AlbumTrailer', raw, model);
     return model;
   }
 }
@@ -44,6 +45,7 @@ export class AlbumSimilarEntities extends YandexMusicModel {
     }
     const model = new AlbumSimilarEntities(client);
     model.items = Array.isArray(raw['items']) ? (raw['items'] as JSONValue[]) : undefined;
+    reportUnknown(client, 'AlbumSimilarEntities', raw, model);
     return model;
   }
 }

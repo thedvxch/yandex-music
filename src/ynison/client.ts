@@ -193,6 +193,11 @@ export class YnisonClient {
   private readonly listeners: StateListener[] = [];
   private closed = false;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  /** `Date.now()` of the last WS activity (any frame, ping or pong) on the state
+   * socket. Tracks transport liveness independently of state-frame arrival:
+   * Ynison only pushes a state frame on a state change, so a paused/idle player
+   * is silent for minutes while the pipe is perfectly healthy. */
+  private lastActivity = 0;
 
   constructor(opts: YnisonClientOptions) {
     this.token = opts.token;
@@ -203,6 +208,14 @@ export class YnisonClient {
   /** The device id used by this session. */
   get deviceIdValue(): string {
     return this.deviceId;
+  }
+
+  /** `Date.now()` of the last WS activity on the state socket (any frame, ping or
+   * pong), or `0` before the socket opens. Use this — not state-frame arrival —
+   * to judge transport liveness: Ynison is legitimately silent while the player
+   * is paused/idle, but the keep-alive ping/pong keeps this fresh. */
+  get lastActivityAt(): number {
+    return this.lastActivity;
   }
 
   /** Register a listener invoked for each state frame. */
@@ -280,12 +293,23 @@ export class YnisonClient {
       let opened = false;
       ws.on('open', () => {
         opened = true;
+        this.lastActivity = Date.now();
         ws.send(JSON.stringify(buildUpdateFullStateRequest(this.deviceId, this.deviceInfo)));
         this.pingTimer = setInterval(() => {
           if (ws.readyState === ws.OPEN) ws.ping();
         }, KEEPALIVE_PING_INTERVAL_MS);
       });
+      // any inbound frame, ping or pong proves the pipe is alive — track it so the
+      // realtime watchdog distinguishes "paused player, silent but healthy" from
+      // a dead socket.
+      ws.on('ping', () => {
+        this.lastActivity = Date.now();
+      });
+      ws.on('pong', () => {
+        this.lastActivity = Date.now();
+      });
       ws.on('message', (data: RawData, isBinary: boolean) => {
+        this.lastActivity = Date.now();
         if (isBinary) return;
         const text = data.toString();
         const err = parseErrorFrame(text);

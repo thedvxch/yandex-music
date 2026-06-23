@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, deList, isJsonObject, reportUnknown } from '../base.js';
 import { Album } from './album/album.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
@@ -23,6 +23,7 @@ export class Presaves extends YandexMusicModel {
     const model = new Presaves(client);
     model.upcomingAlbums = deList(Album.deJson, raw['upcomingAlbums'], client);
     model.releasedAlbums = deList(Album.deJson, raw['releasedAlbums'], client);
+    reportUnknown(client, 'Presaves', raw, model);
     return model;
   }
 }

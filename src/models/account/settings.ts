@@ -102,6 +102,8 @@ export class Settings extends YandexMusicModel {
   promoCodesEnabled?: boolean;
   /** Monthly web payment price (raw JSON, pending a typed `Price` model). */
   webPaymentMonthProductPrice?: JSONValue;
+  /** Identifier of the offers batch presented to the account. */
+  offersBatchId?: string;
 
   /** @see {@link Settings} */
   static deJson(raw: JSONValue | undefined, client?: Client): Settings | null {
@@ -115,7 +117,9 @@ export class Settings extends YandexMusicModel {
       'webPaymentUrl',
       'promoCodesEnabled',
       'webPaymentMonthProductPrice',
+      'offersBatchId',
     ]);
+    reportUnknown(client, 'Settings', raw, model);
     return model;
   }
 }
@@ -132,6 +136,7 @@ export class PermissionAlerts extends YandexMusicModel {
     }
     const model = new PermissionAlerts(client);
     assign(model, raw, ['alerts']);
+    reportUnknown(client, 'PermissionAlerts', raw, model);
     return model;
   }
 }
@@ -153,6 +158,7 @@ export class PromoCodeStatus extends YandexMusicModel {
     const model = new PromoCodeStatus(client);
     assign(model, raw, ['status', 'statusDesc']);
     model.accountStatus = Status.deJson(raw['accountStatus'], client) ?? undefined;
+    reportUnknown(client, 'PromoCodeStatus', raw, model);
     return model;
   }
 }
@@ -173,6 +179,8 @@ export class Experiments extends YandexMusicModel {
       return null;
     }
     const model = new Experiments(client);
+    // captures the whole raw flag map wholesale (every key is consumed via
+    // `values`), so reportUnknown would mis-flag every flag as drift.
     model.values = raw;
     return model;
   }
@@ -189,6 +197,7 @@ export class ExperimentsDetails extends YandexMusicModel {
       return null;
     }
     const model = new ExperimentsDetails(client);
+    // see Experiments.deJson: whole-map capture, reportUnknown not applicable.
     model.values = raw;
     return model;
   }

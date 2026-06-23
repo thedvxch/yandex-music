@@ -47,6 +47,7 @@ export class DownloadInfo extends YandexMusicModel {
     }
     const model = new DownloadInfo(client);
     assign(model, raw, ['codec', 'bitrateInKbps', 'gain', 'preview', 'downloadInfoUrl', 'direct']);
+    reportUnknown(client, 'DownloadInfo', raw, model);
     return model;
   }
 
@@ -170,6 +171,10 @@ export class LosslessDownloadInfo extends YandexMusicModel {
   url?: string;
   /** File size in bytes, when known. */
   size?: number;
+  /** Whether loudness-normalization gain data is available. */
+  gain?: boolean;
+  /** Canonical track id when the requested id is an alias. */
+  realId?: string;
 
   /** @see {@link LosslessDownloadInfo} */
   static deJson(raw: JSONValue | undefined, client?: Client): LosslessDownloadInfo | null {
@@ -177,7 +182,20 @@ export class LosslessDownloadInfo extends YandexMusicModel {
       return null;
     }
     const model = new LosslessDownloadInfo(client);
-    assign(model, raw, ['trackId', 'quality', 'codec', 'bitrate', 'transport', 'key', 'urls', 'url', 'size']);
+    assign(model, raw, [
+      'trackId',
+      'quality',
+      'codec',
+      'bitrate',
+      'transport',
+      'key',
+      'urls',
+      'url',
+      'size',
+      'gain',
+      'realId',
+    ]);
+    reportUnknown(client, 'LosslessDownloadInfo', raw, model);
     return model;
   }
 
@@ -267,6 +285,7 @@ export class TrackLyrics extends YandexMusicModel {
     const model = new TrackLyrics(client);
     assign(model, raw, ['downloadUrl', 'lyricId', 'externalLyricId', 'writers']);
     model.major = LyricsMajor.deJson(raw['major'], client) ?? undefined;
+    reportUnknown(client, 'TrackLyrics', raw, model);
     return model;
   }
 
@@ -300,6 +319,7 @@ export class SimilarTracks extends YandexMusicModel {
     const model = new SimilarTracks(client);
     model.track = Track.deJson(raw['track'], client) ?? undefined;
     model.similarTracks = deList(Track.deJson, raw['similarTracks'], client);
+    reportUnknown(client, 'SimilarTracks', raw, model);
     return model;
   }
 }
@@ -357,6 +377,7 @@ export class TrackTrailer extends YandexMusicModel {
     const model = new TrackTrailer(client);
     assign(model, raw, ['title']);
     model.track = Track.deJson(raw['track'], client) ?? undefined;
+    reportUnknown(client, 'TrackTrailer', raw, model);
     return model;
   }
 }

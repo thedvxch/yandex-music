@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../../base.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -21,6 +21,7 @@ export class Stats extends YandexMusicModel {
     }
     const model = new Stats(client);
     assign(model, raw, ['lastMonthListeners', 'lastMonthListenersDelta']);
+    reportUnknown(client, 'Stats', raw, model);
     return model;
   }
 }

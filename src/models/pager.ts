@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../base.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -23,6 +23,7 @@ export class Pager extends YandexMusicModel {
     }
     const model = new Pager(client);
     assign(model, raw, ['total', 'page', 'perPage']);
+    reportUnknown(client, 'Pager', raw, model);
     return model;
   }
 }

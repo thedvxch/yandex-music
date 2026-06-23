@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { TrackId } from '../trackShort.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -24,6 +24,7 @@ export class Context extends YandexMusicModel {
     }
     const model = new Context(client);
     assign(model, raw, ['type', 'id', 'description']);
+    reportUnknown(client, 'Context', raw, model);
     return model;
   }
 }
@@ -45,6 +46,7 @@ export class QueueItem extends YandexMusicModel {
     const model = new QueueItem(client);
     assign(model, raw, ['id', 'modified']);
     model.context = Context.deJson(raw['context'], client) ?? undefined;
+    reportUnknown(client, 'QueueItem', raw, model);
     return model;
   }
 }
@@ -73,6 +75,7 @@ export class Queue extends YandexMusicModel {
     assign(model, raw, ['currentIndex', 'modified', 'id', 'from']);
     model.context = Context.deJson(raw['context'], client) ?? undefined;
     model.tracks = deList(TrackId.deJson, raw['tracks'], client);
+    reportUnknown(client, 'Queue', raw, model);
     return model;
   }
 }

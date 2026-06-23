@@ -44,18 +44,36 @@ export function deList<T>(deJson: DeJson<T>, data: JSONValue | undefined, client
   return result;
 }
 
+/** A report of API keys a model did not map, passed to {@link UnknownFieldReporter}. */
+export interface UnknownFieldsReport {
+  /** The model name (the `label` passed to {@link reportUnknown}). */
+  model: string;
+  /** The raw API keys with no matching field on the finished model. */
+  fields: string[];
+  /** The raw JSON object the model was built from, for inspection. */
+  raw: JSONObject;
+}
+
 /**
- * When the owning client has `reportUnknownFields` enabled, warn about keys the
- * API returned that the finished model did not map.
+ * A hook invoked when a model leaves API fields unmapped. Configure it via
+ * `onUnknownField` on the client to route drift reports somewhere other than the
+ * console (a logger, metrics, a test assertion).
+ */
+export type UnknownFieldReporter = (report: UnknownFieldsReport) => void;
+
+/**
+ * Detect API keys the finished model did not map and report them — to the
+ * client's `onUnknownField` hook when set, otherwise to `console.warn` when
+ * `reportUnknownFields` is enabled.
  *
  * Called at the end of a `deJson` once every field (scalar and nested) is
  * assigned: any raw key without a matching own-property on the model is unmapped.
  * This relies on the library's verbatim camelCase mapping (model field names
- * equal API keys), which holds throughout. Opt-in and side-effect-free unless the
- * flag is set, so it is safe to leave wired into every model.
+ * equal API keys), which holds throughout. Detection is off unless one of the
+ * two options is set, so it is safe to leave wired into every model.
  *
- * @param client - The owning client (carries the `reportUnknownFields` flag).
- * @param label - Model name, used in the warning.
+ * @param client - The owning client (carries `reportUnknownFields`/`onUnknownField`).
+ * @param label - Model name, used in the report.
  * @param raw - The raw JSON object the model was built from.
  * @param model - The finished model instance.
  * @param alsoKnown - Raw keys consumed under a different model field name (for
@@ -68,7 +86,7 @@ export function reportUnknown(
   model: object,
   alsoKnown?: readonly string[],
 ): void {
-  if (!client?.reportUnknownFields) {
+  if (!client || (!client.reportUnknownFields && !client.onUnknownField)) {
     return;
   }
   const known = new Set(Object.keys(model));
@@ -78,10 +96,15 @@ export function reportUnknown(
     }
   }
   const unknown = Object.keys(raw).filter((key) => !known.has(key));
-  if (unknown.length > 0) {
-    // eslint-disable-next-line no-console
-    console.warn(`[yandex-music] ${label}: API returned unmapped field(s): ${unknown.join(', ')}`);
+  if (unknown.length === 0) {
+    return;
   }
+  if (client.onUnknownField) {
+    client.onUnknownField({ model: label, fields: unknown, raw });
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.warn(`[yandex-music] ${label}: API returned unmapped field(s): ${unknown.join(', ')}`);
 }
 
 /**

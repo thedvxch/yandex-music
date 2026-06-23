@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -36,6 +36,7 @@ export class Lyrics extends YandexMusicModel {
     }
     const model = new Lyrics(client);
     assign(model, raw, ['id', 'lyrics', 'fullLyrics', 'hasRights', 'showTranslation', 'textLanguage', 'url']);
+    reportUnknown(client, 'Lyrics', raw, model);
     return model;
   }
 }
@@ -64,6 +65,7 @@ export class VideoSupplement extends YandexMusicModel {
     }
     const model = new VideoSupplement(client);
     assign(model, raw, ['cover', 'provider', 'title', 'providerVideoId', 'url', 'embedUrl', 'embed']);
+    reportUnknown(client, 'VideoSupplement', raw, model);
     return model;
   }
 }
@@ -90,6 +92,7 @@ export class Supplement extends YandexMusicModel {
     assign(model, raw, ['id', 'radioIsAvailable', 'description']);
     model.lyrics = Lyrics.deJson(raw['lyrics'], client) ?? undefined;
     model.videos = deList(VideoSupplement.deJson, raw['videos'], client);
+    reportUnknown(client, 'Supplement', raw, model);
     return model;
   }
 }

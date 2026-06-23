@@ -9,7 +9,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Track } from '../track/track.js';
 import { TrackId } from '../trackShort.js';
 import { Playlist } from '../playlist/playlist.js';
@@ -47,6 +47,12 @@ export class BlockEntity extends YandexMusicModel {
    * Unknown types fall back to the raw JSON value.
    */
   data?: BlockEntityData;
+  /** Entity description. */
+  description?: string;
+  /** Formatted (HTML) entity description. */
+  descriptionFormatted?: string;
+  /** Last-updated timestamp (ISO 8601). */
+  lastUpdated?: string;
 
   /** @see {@link BlockEntity} */
   static deJson(raw: JSONValue | undefined, client?: Client): BlockEntity | null {
@@ -54,7 +60,7 @@ export class BlockEntity extends YandexMusicModel {
       return null;
     }
     const model = new BlockEntity(client);
-    assign(model, raw, ['id', 'type']);
+    assign(model, raw, ['id', 'type', 'description', 'descriptionFormatted', 'lastUpdated']);
     const data = raw['data'];
     switch (model.type) {
       case 'personal-playlist':
@@ -81,6 +87,7 @@ export class BlockEntity extends YandexMusicModel {
       default:
         model.data = data;
     }
+    reportUnknown(client, 'BlockEntity', raw, model);
     return model;
   }
 }
@@ -101,6 +108,18 @@ export class Block extends YandexMusicModel {
   description?: string;
   /** Block-level data (raw JSON, pending typed variants). */
   data?: JSONValue;
+  /** Background image URI template. */
+  backgroundImageUrl?: string;
+  /** Background video identifier. */
+  backgroundVideoId?: string;
+  /** Background video URL. */
+  backgroundVideoUrl?: string;
+  /**
+   * Play-context reference driving the block's playback (`{kind, uid,
+   * playlistUuid}`); free-form raw JSON, distinct from the landing-entity
+   * {@link PlayContext}.
+   */
+  playContext?: JSONValue;
 
   /** @see {@link Block} */
   static deJson(raw: JSONValue | undefined, client?: Client): Block | null {
@@ -108,8 +127,20 @@ export class Block extends YandexMusicModel {
       return null;
     }
     const model = new Block(client);
-    assign(model, raw, ['id', 'type', 'typeForFrom', 'title', 'description', 'data']);
+    assign(model, raw, [
+      'id',
+      'type',
+      'typeForFrom',
+      'title',
+      'description',
+      'data',
+      'backgroundImageUrl',
+      'backgroundVideoId',
+      'backgroundVideoUrl',
+      'playContext',
+    ]);
     model.entities = deList(BlockEntity.deJson, raw['entities'], client);
+    reportUnknown(client, 'Block', raw, model);
     return model;
   }
 }
@@ -131,6 +162,7 @@ export class Landing extends YandexMusicModel {
     const model = new Landing(client);
     assign(model, raw, ['pumpkin', 'contentId']);
     model.blocks = deList(Block.deJson, raw['blocks'], client);
+    reportUnknown(client, 'Landing', raw, model);
     return model;
   }
 }
@@ -159,6 +191,7 @@ export class LandingList extends YandexMusicModel {
     }
     const model = new LandingList(client);
     assign(model, raw, ['type', 'typeForFrom', 'title', 'id', 'newReleases', 'newPlaylists', 'podcasts']);
+    reportUnknown(client, 'LandingList', raw, model);
     return model;
   }
 }
@@ -186,6 +219,7 @@ export class Chart extends YandexMusicModel {
     const model = new Chart(client);
     assign(model, raw, ['position', 'progress', 'listeners', 'shift', 'bgColor']);
     model.trackId = TrackId.deJson(raw['trackId'], client) ?? undefined;
+    reportUnknown(client, 'Chart', raw, model);
     return model;
   }
 }
@@ -205,6 +239,7 @@ export class ChartItem extends YandexMusicModel {
     const model = new ChartItem(client);
     model.track = Track.deJson(raw['track'], client) ?? undefined;
     model.chart = Chart.deJson(raw['chart'], client) ?? undefined;
+    reportUnknown(client, 'ChartItem', raw, model);
     return model;
   }
 }
@@ -234,6 +269,7 @@ export class ChartInfo extends YandexMusicModel {
     const model = new ChartInfo(client);
     assign(model, raw, ['id', 'type', 'typeForFrom', 'title', 'menu', 'chartDescription']);
     model.chart = Playlist.deJson(raw['chart'], client) ?? undefined;
+    reportUnknown(client, 'ChartInfo', raw, model);
     return model;
   }
 }

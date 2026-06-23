@@ -8,7 +8,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { TrackId } from '../trackShort.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -41,6 +41,7 @@ export class Promotion extends YandexMusicModel {
     }
     const model = new Promotion(client);
     assign(model, raw, ['promoId', 'title', 'subtitle', 'heading', 'url', 'urlScheme', 'textColor', 'gradient', 'image']);
+    reportUnknown(client, 'Promotion', raw, model);
     return model;
   }
 }
@@ -60,6 +61,7 @@ export class TrackShortOld extends YandexMusicModel {
     const model = new TrackShortOld(client);
     assign(model, raw, ['timestamp']);
     model.trackId = TrackId.deJson(raw['trackId'], client) ?? undefined;
+    reportUnknown(client, 'TrackShortOld', raw, model);
     return model;
   }
 }
@@ -72,6 +74,8 @@ export class PlayContext extends YandexMusicModel {
   contextItem?: string;
   /** Tracks recently played in this context. */
   tracks?: TrackShortOld[];
+  /** Context payload (free-form raw JSON, pending a typed model). */
+  payload?: JSONValue;
 
   /** @see {@link PlayContext} */
   static deJson(raw: JSONValue | undefined, client?: Client): PlayContext | null {
@@ -79,8 +83,9 @@ export class PlayContext extends YandexMusicModel {
       return null;
     }
     const model = new PlayContext(client);
-    assign(model, raw, ['context', 'contextItem']);
+    assign(model, raw, ['context', 'contextItem', 'payload']);
     model.tracks = deList(TrackShortOld.deJson, raw['tracks'], client);
+    reportUnknown(client, 'PlayContext', raw, model);
     return model;
   }
 }
@@ -111,6 +116,7 @@ export class MixLink extends YandexMusicModel {
     }
     const model = new MixLink(client);
     assign(model, raw, ['title', 'url', 'urlScheme', 'textColor', 'backgroundColor', 'backgroundImageUri', 'coverWhite', 'coverUri']);
+    reportUnknown(client, 'MixLink', raw, model);
     return model;
   }
 }

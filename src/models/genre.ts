@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
 import { Icon } from './common.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
@@ -26,6 +26,8 @@ export class Genre extends YandexMusicModel {
   showInMenu?: boolean;
   /** Region codes where shown. */
   showInRegions?: number[];
+  /** Region codes where hidden. */
+  hideInRegions?: number[];
   /** Full title. */
   fullTitle?: string;
   /** URL slug. */
@@ -52,12 +54,14 @@ export class Genre extends YandexMusicModel {
       'images',
       'showInMenu',
       'showInRegions',
+      'hideInRegions',
       'fullTitle',
       'urlPart',
       'color',
     ]);
     model.radioIcon = Icon.deJson(raw['radioIcon'], client) ?? undefined;
     model.subGenres = deList(Genre.deJson, raw['subGenres'], client);
+    reportUnknown(client, 'Genre', raw, model);
     return model;
   }
 }

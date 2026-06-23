@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
 import { ContentRestrictions, Cover } from './common.js';
 import { Artist } from './artist/artist.js';
 import { Pager } from './pager.js';
@@ -63,6 +63,7 @@ export class Clip extends YandexMusicModel {
     model.artists = deList(Artist.deJson, raw['artists'], client);
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
     model.contentRestrictions = ContentRestrictions.deJson(raw['contentRestrictions'], client) ?? undefined;
+    reportUnknown(client, 'Clip', raw, model);
     return model;
   }
 }
@@ -82,6 +83,7 @@ export class ClipsWillLike extends YandexMusicModel {
     const model = new ClipsWillLike(client);
     model.clips = deList(Clip.deJson, raw['clips'], client);
     model.pager = Pager.deJson(raw['pager'], client) ?? undefined;
+    reportUnknown(client, 'ClipsWillLike', raw, model);
     return model;
   }
 }

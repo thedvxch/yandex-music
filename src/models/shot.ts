@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -21,6 +21,7 @@ export class ShotType extends YandexMusicModel {
     }
     const model = new ShotType(client);
     assign(model, raw, ['id', 'title']);
+    reportUnknown(client, 'ShotType', raw, model);
     return model;
   }
 }
@@ -44,6 +45,7 @@ export class ShotData extends YandexMusicModel {
     const model = new ShotData(client);
     assign(model, raw, ['coverUri', 'mdsUrl', 'shotText']);
     model.shotType = ShotType.deJson(raw['shotType'], client) ?? undefined;
+    reportUnknown(client, 'ShotData', raw, model);
     return model;
   }
 }
@@ -69,6 +71,7 @@ export class Shot extends YandexMusicModel {
     const model = new Shot(client);
     assign(model, raw, ['order', 'played', 'shotId', 'status']);
     model.shotData = ShotData.deJson(raw['shotData'], client) ?? undefined;
+    reportUnknown(client, 'Shot', raw, model);
     return model;
   }
 }
@@ -88,6 +91,7 @@ export class ShotEvent extends YandexMusicModel {
     const model = new ShotEvent(client);
     assign(model, raw, ['eventId']);
     model.shots = deList(Shot.deJson, raw['shots'], client);
+    reportUnknown(client, 'ShotEvent', raw, model);
     return model;
   }
 }

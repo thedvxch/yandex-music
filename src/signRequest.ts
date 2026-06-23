@@ -5,6 +5,7 @@
  * @packageDocumentation
  */
 import { createHmac } from 'node:crypto';
+import { YandexMusicError } from './exceptions.js';
 
 /** Signing key extracted from the official Android application. */
 export const DEFAULT_SIGN_KEY = 'p93jhgh689SBReK6ghtw62';
@@ -28,7 +29,11 @@ export interface Sign {
  */
 export function convertTrackIdToNumber(trackId: string | number): number {
   if (typeof trackId === 'string') {
-    return Number.parseInt(trackId.split(':')[0]!, 10);
+    const numeric = Number.parseInt(trackId.split(':')[0]!, 10);
+    if (Number.isNaN(numeric)) {
+      throw new YandexMusicError(`Invalid track id: ${JSON.stringify(trackId)}`);
+    }
+    return numeric;
   }
   return trackId;
 }

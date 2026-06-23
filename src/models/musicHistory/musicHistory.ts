@@ -9,7 +9,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -35,6 +35,7 @@ export class MusicHistoryItemId extends YandexMusicModel {
     }
     const model = new MusicHistoryItemId(client);
     assign(model, raw, ['id', 'trackId', 'albumId', 'uid', 'kind', 'seeds']);
+    reportUnknown(client, 'MusicHistoryItemId', raw, model);
     return model;
   }
 }
@@ -54,6 +55,7 @@ export class MusicHistoryItemData extends YandexMusicModel {
     const model = new MusicHistoryItemData(client);
     assign(model, raw, ['fullModel']);
     model.itemId = MusicHistoryItemId.deJson(raw['itemId'], client) ?? undefined;
+    reportUnknown(client, 'MusicHistoryItemData', raw, model);
     return model;
   }
 }
@@ -73,6 +75,7 @@ export class MusicHistoryItem extends YandexMusicModel {
     const model = new MusicHistoryItem(client);
     assign(model, raw, ['type']);
     model.data = MusicHistoryItemData.deJson(raw['data'], client) ?? undefined;
+    reportUnknown(client, 'MusicHistoryItem', raw, model);
     return model;
   }
 }
@@ -92,6 +95,7 @@ export class MusicHistoryGroup extends YandexMusicModel {
     const model = new MusicHistoryGroup(client);
     model.context = MusicHistoryItem.deJson(raw['context'], client) ?? undefined;
     model.tracks = deList(MusicHistoryItem.deJson, raw['tracks'], client);
+    reportUnknown(client, 'MusicHistoryGroup', raw, model);
     return model;
   }
 }
@@ -111,6 +115,7 @@ export class MusicHistoryTab extends YandexMusicModel {
     const model = new MusicHistoryTab(client);
     assign(model, raw, ['date']);
     model.items = deList(MusicHistoryGroup.deJson, raw['items'], client);
+    reportUnknown(client, 'MusicHistoryTab', raw, model);
     return model;
   }
 }
@@ -127,6 +132,7 @@ export class MusicHistory extends YandexMusicModel {
     }
     const model = new MusicHistory(client);
     model.historyTabs = deList(MusicHistoryTab.deJson, raw['historyTabs'], client);
+    reportUnknown(client, 'MusicHistory', raw, model);
     return model;
   }
 }
@@ -143,6 +149,7 @@ export class MusicHistoryItems extends YandexMusicModel {
     }
     const model = new MusicHistoryItems(client);
     model.items = deList(MusicHistoryItem.deJson, raw['items'], client);
+    reportUnknown(client, 'MusicHistoryItems', raw, model);
     return model;
   }
 }

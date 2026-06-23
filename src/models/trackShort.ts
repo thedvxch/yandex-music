@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../base.js';
 import { Track } from './track/track.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
@@ -31,6 +31,8 @@ export class TrackShort extends YandexMusicModel {
   track?: Track;
   /** Original index within the source list. */
   originalIndex?: number;
+  /** Original index within the shuffled source list. */
+  originalShuffleIndex?: number;
 
   /** @see {@link TrackShort} */
   static deJson(raw: JSONValue | undefined, client?: Client): TrackShort | null {
@@ -38,8 +40,18 @@ export class TrackShort extends YandexMusicModel {
       return null;
     }
     const model = new TrackShort(client);
-    assign(model, raw, ['id', 'timestamp', 'albumId', 'playCount', 'recent', 'chart', 'originalIndex']);
+    assign(model, raw, [
+      'id',
+      'timestamp',
+      'albumId',
+      'playCount',
+      'recent',
+      'chart',
+      'originalIndex',
+      'originalShuffleIndex',
+    ]);
     model.track = Track.deJson(raw['track'], client) ?? undefined;
+    reportUnknown(client, 'TrackShort', raw, model);
     return model;
   }
 }
@@ -62,6 +74,7 @@ export class TrackId extends YandexMusicModel {
     }
     const model = new TrackId(client);
     assign(model, raw, ['id', 'trackId', 'albumId', 'from']);
+    reportUnknown(client, 'TrackId', raw, model);
     return model;
   }
 }

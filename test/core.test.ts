@@ -34,6 +34,7 @@ import {
   NotFoundError,
   Playlist,
   Search,
+  Sequence,
   Suggestions,
   Track,
   YandexMusicError,
@@ -100,6 +101,9 @@ test('getSignRequest produces a base64 signature for a compound id', () => {
 test('convertTrackIdToNumber drops the album suffix', () => {
   assert.equal(convertTrackIdToNumber('42:7'), 42);
   assert.equal(convertTrackIdToNumber(99), 99);
+  // a non-numeric id must throw instead of silently yielding NaN.
+  assert.throws(() => convertTrackIdToNumber('not-a-number'), /Invalid track id/);
+  assert.throws(() => convertTrackIdToNumber(''), /Invalid track id/);
 });
 
 test('exception hierarchy and names', () => {
@@ -556,4 +560,35 @@ test('reportUnknown warns only when the client opts in', () => {
   } finally {
     console.warn = original;
   }
+});
+
+test('onUnknownField hook receives structured reports instead of console.warn', () => {
+  const reports: Array<{ model: string; fields: string[] }> = [];
+  const original = console.warn;
+  let warned = false;
+  console.warn = () => void (warned = true);
+  try {
+    const client = { onUnknownField: (r: { model: string; fields: string[] }) => void reports.push(r) } as never;
+    reportUnknown(client, 'Album', { id: 1, mystery: 2, alsoNew: 3 }, { id: 1 });
+    // no drift → no report.
+    reportUnknown(client, 'Album', { id: 1 }, { id: 1 });
+  } finally {
+    console.warn = original;
+  }
+  assert.equal(warned, false); // hook set → never falls back to console.warn
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0]!.model, 'Album');
+  assert.deepEqual(reports[0]!.fields.sort(), ['alsoNew', 'mystery']);
+});
+
+test('newly mapped fields deserialize (0.2.0 drift sweep)', () => {
+  const track = Track.deJson({ id: 5, chart: { position: 1, listeners: 9 } });
+  assert.equal(track?.chart?.position, 1);
+  const album = Album.deJson({ id: 7, contentRestrictions: { ageRating: 18 }, presaveDate: '2026-07-01', albumType: 'single' });
+  assert.equal(album?.presaveDate, '2026-07-01');
+  assert.equal(album?.albumType, 'single');
+  assert.ok(album?.contentRestrictions);
+  const seq = Sequence.deJson({ type: 'track', trackParameters: { bpm: 120, hue: 200, energy: 0.7 } });
+  assert.equal(seq?.trackParameters?.bpm, 120);
+  assert.equal(seq?.trackParameters?.energy, 0.7);
 });

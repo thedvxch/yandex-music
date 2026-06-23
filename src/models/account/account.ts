@@ -20,6 +20,7 @@ export class PassportPhone extends YandexMusicModel {
     }
     const model = new PassportPhone(client);
     assign(model, raw, ['phone']);
+    reportUnknown(client, 'PassportPhone', raw, model);
     return model;
   }
 }

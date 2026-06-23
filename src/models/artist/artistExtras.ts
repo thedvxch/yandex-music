@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { Cover } from '../common.js';
+import { Cover, Link } from '../common.js';
 import { Track } from '../track/track.js';
 import { Album } from '../album/album.js';
 import { Video } from '../video.js';
@@ -41,6 +41,7 @@ export class ArtistLink extends YandexMusicModel {
     }
     const model = new ArtistLink(client);
     assign(model, raw, ['title', 'subtitle', 'url', 'imgUrl']);
+    reportUnknown(client, 'ArtistLink', raw, model);
     return model;
   }
 }
@@ -57,6 +58,7 @@ export class ArtistLinks extends YandexMusicModel {
     }
     const model = new ArtistLinks(client);
     model.links = deList(ArtistLink.deJson, raw['links'], client);
+    reportUnknown(client, 'ArtistLinks', raw, model);
     return model;
   }
 }
@@ -76,6 +78,7 @@ export class ArtistAlbums extends YandexMusicModel {
     const model = new ArtistAlbums(client);
     model.albums = deList(Album.deJson, raw['albums'], client);
     model.pager = Pager.deJson(raw['pager'], client) ?? undefined;
+    reportUnknown(client, 'ArtistAlbums', raw, model);
     return model;
   }
 }
@@ -97,6 +100,7 @@ export class ArtistSimilar extends YandexMusicModel {
     model.similarArtists = raw['similarArtists']
       ? deList(Artist.deJson, raw['similarArtists'], client)
       : undefined;
+    reportUnknown(client, 'ArtistSimilar', raw, model);
     return model;
   }
 }
@@ -116,6 +120,7 @@ export class ArtistTrailer extends YandexMusicModel {
     const model = new ArtistTrailer(client);
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.trailer = TrailerInfo.deJson(raw['trailer'], client) ?? undefined;
+    reportUnknown(client, 'ArtistTrailer', raw, model);
     return model;
   }
 }
@@ -164,6 +169,8 @@ export class BriefInfo extends YandexMusicModel {
   customWave?: CustomWave;
   /** Whether the artist has a trailer. */
   hasTrailer?: boolean;
+  /** External links (official site, socials). */
+  links?: Link[];
 
   /** @see {@link BriefInfo} */
   static deJson(raw: JSONValue | undefined, client?: Client): BriefInfo | null {
@@ -187,6 +194,7 @@ export class BriefInfo extends YandexMusicModel {
     model.clips = deList(Clip.deJson, raw['clips'], client);
     model.stats = Stats.deJson(raw['stats'], client) ?? undefined;
     model.customWave = CustomWave.deJson(raw['customWave'], client) ?? undefined;
+    model.links = raw['links'] ? deList(Link.deJson, raw['links'], client) : undefined;
     reportUnknown(client, 'BriefInfo', raw, model);
     return model;
   }

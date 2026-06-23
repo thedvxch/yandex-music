@@ -7,7 +7,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../../base.js';
 import { Cover } from '../common.js';
 import { User } from '../user.js';
 import type { Client } from '../../client.js';
@@ -38,6 +38,7 @@ export class CaseForms extends YandexMusicModel {
     }
     const model = new CaseForms(client);
     assign(model, raw, ['nominative', 'genitive', 'dative', 'accusative', 'instrumental', 'prepositional']);
+    reportUnknown(client, 'CaseForms', raw, model);
     return model;
   }
 }
@@ -60,6 +61,7 @@ export class MadeFor extends YandexMusicModel {
     const model = new MadeFor(client);
     model.userInfo = User.deJson(raw['userInfo'], client) ?? undefined;
     model.caseForms = CaseForms.deJson(raw['caseForms'], client) ?? undefined;
+    reportUnknown(client, 'MadeFor', raw, model);
     return model;
   }
 }
@@ -82,6 +84,7 @@ export class PlayCounter extends YandexMusicModel {
     }
     const model = new PlayCounter(client);
     assign(model, raw, ['value', 'description', 'updated']);
+    reportUnknown(client, 'PlayCounter', raw, model);
     return model;
   }
 }
@@ -102,6 +105,7 @@ export class PlaylistAbsence extends YandexMusicModel {
     }
     const model = new PlaylistAbsence(client);
     assign(model, raw, ['kind', 'reason']);
+    reportUnknown(client, 'PlaylistAbsence', raw, model);
     return model;
   }
 }
@@ -125,6 +129,7 @@ export class OpenGraphData extends YandexMusicModel {
     const model = new OpenGraphData(client);
     assign(model, raw, ['title', 'description']);
     model.image = Cover.deJson(raw['image'], client) ?? undefined;
+    reportUnknown(client, 'OpenGraphData', raw, model);
     return model;
   }
 }
@@ -155,6 +160,7 @@ export class Brand extends YandexMusicModel {
     }
     const model = new Brand(client);
     assign(model, raw, ['image', 'background', 'reference', 'pixels', 'theme', 'playlistTheme', 'button']);
+    reportUnknown(client, 'Brand', raw, model);
     return model;
   }
 }
@@ -173,6 +179,7 @@ export class PlaylistAvailability extends YandexMusicModel {
     }
     const model = new PlaylistAvailability(client);
     assign(model, raw, ['available']);
+    reportUnknown(client, 'PlaylistAvailability', raw, model);
     return model;
   }
 }
@@ -191,6 +198,8 @@ export class CustomWave extends YandexMusicModel {
   header?: string;
   /** Background image URL. */
   backgroundImageUrl?: string;
+  /** Square-format agent animation URL. */
+  squareAgentAnimation?: string;
 
   /** @see {@link CustomWave} */
   static deJson(raw: JSONValue | undefined, client?: Client): CustomWave | null {
@@ -198,7 +207,8 @@ export class CustomWave extends YandexMusicModel {
       return null;
     }
     const model = new CustomWave(client);
-    assign(model, raw, ['title', 'animationUrl', 'position', 'header', 'backgroundImageUrl']);
+    assign(model, raw, ['title', 'animationUrl', 'position', 'header', 'backgroundImageUrl', 'squareAgentAnimation']);
+    reportUnknown(client, 'CustomWave', raw, model);
     return model;
   }
 }
@@ -225,6 +235,7 @@ export class Contest extends YandexMusicModel {
     }
     const model = new Contest(client);
     assign(model, raw, ['contestId', 'status', 'canEdit', 'sent', 'withdrawn']);
+    reportUnknown(client, 'Contest', raw, model);
     return model;
   }
 }

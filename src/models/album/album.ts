@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { Cover, CoverDerivedColors, Link } from '../common.js';
+import { ContentRestrictions, Cover, CoverDerivedColors, Link } from '../common.js';
 import { Pager } from '../pager.js';
 import { CustomWave } from '../playlist/promo.js';
 import { Artist } from '../artist/artist.js';
@@ -37,6 +37,7 @@ export class Label extends YandexMusicModel {
     const model = new Label(client);
     assign(model, raw, ['id', 'name', 'description', 'descriptionFormatted', 'image', 'type']);
     model.links = raw['links'] ? deList(Link.deJson, raw['links'], client) : undefined;
+    reportUnknown(client, 'Label', raw, model);
     return model;
   }
 }
@@ -55,6 +56,7 @@ export class TrackPosition extends YandexMusicModel {
     }
     const model = new TrackPosition(client);
     assign(model, raw, ['volume', 'index']);
+    reportUnknown(client, 'TrackPosition', raw, model);
     return model;
   }
 }
@@ -75,6 +77,7 @@ export class Deprecation extends YandexMusicModel {
     }
     const model = new Deprecation(client);
     assign(model, raw, ['targetAlbumId', 'status', 'done']);
+    reportUnknown(client, 'Deprecation', raw, model);
     return model;
   }
 }
@@ -95,6 +98,7 @@ export class AlbumActionButton extends YandexMusicModel {
     }
     const model = new AlbumActionButton(client);
     assign(model, raw, ['text', 'url', 'color']);
+    reportUnknown(client, 'AlbumActionButton', raw, model);
     return model;
   }
 }
@@ -189,6 +193,8 @@ export class Album extends YandexMusicModel {
   releaseDate?: string;
   /** Album kind, for example `single` or `compilation`. */
   type?: string;
+  /** Album type marker (newer key, for example `single`, `podcast`, `audiobook`). */
+  albumType?: string;
   /** Position of a single track within the album (contextual). */
   trackPosition?: TrackPosition;
   /** Regions where available. */
@@ -209,6 +215,12 @@ export class Album extends YandexMusicModel {
   disclaimers?: string[];
   /** Call-to-action button. */
   actionButton?: AlbumActionButton;
+  /** Content availability restrictions (age rating, etc.). */
+  contentRestrictions?: ContentRestrictions;
+  /** Milliseconds until an unreleased album becomes available (pre-saves). */
+  millisecondsUntilRelease?: number;
+  /** Pre-save availability date (ISO 8601), for upcoming albums. */
+  presaveDate?: string;
 
   /**
    * Deserialize an {@link Album}.
@@ -265,6 +277,9 @@ export class Album extends YandexMusicModel {
       'backgroundImageUrl',
       'childContent',
       'trailer',
+      'millisecondsUntilRelease',
+      'presaveDate',
+      'albumType',
     ]);
     model.artists = deList(Artist.deJson, raw['artists'], client);
     model.labels = Album.deLabels(raw['labels'], client);
@@ -276,6 +291,7 @@ export class Album extends YandexMusicModel {
     model.trackPosition = TrackPosition.deJson(raw['trackPosition'], client) ?? undefined;
     model.deprecation = Deprecation.deJson(raw['deprecation'], client) ?? undefined;
     model.actionButton = AlbumActionButton.deJson(raw['actionButton'], client) ?? undefined;
+    model.contentRestrictions = ContentRestrictions.deJson(raw['contentRestrictions'], client) ?? undefined;
     if (Array.isArray(raw['volumes'])) {
       model.volumes = raw['volumes'].map((volume) => deList(Track.deJson, volume, client));
     }

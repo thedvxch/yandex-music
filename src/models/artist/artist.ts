@@ -3,8 +3,8 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
-import { ContentRestrictions, Cover, Link } from '../common.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { ContentRestrictions, Cover, CoverDerivedColors, Link } from '../common.js';
 import { Track } from '../track/track.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -27,6 +27,7 @@ export class Counts extends YandexMusicModel {
     }
     const model = new Counts(client);
     assign(model, raw, ['tracks', 'directAlbums', 'alsoAlbums', 'alsoTracks']);
+    reportUnknown(client, 'Counts', raw, model);
     return model;
   }
 }
@@ -47,6 +48,7 @@ export class Ratings extends YandexMusicModel {
     }
     const model = new Ratings(client);
     assign(model, raw, ['month', 'week', 'day']);
+    reportUnknown(client, 'Ratings', raw, model);
     return model;
   }
 }
@@ -65,6 +67,7 @@ export class Description extends YandexMusicModel {
     }
     const model = new Description(client);
     assign(model, raw, ['text', 'uri']);
+    reportUnknown(client, 'Description', raw, model);
     return model;
   }
 }
@@ -131,6 +134,22 @@ export class Artist extends YandexMusicModel {
   contentRestrictions?: ContentRestrictions;
   /** Cut-out (transparent) cover art. */
   cutoutCover?: Cover;
+  /** Colors derived from the cover image. */
+  derivedColors?: CoverDerivedColors;
+  /** Whether the artist has a trailer. */
+  hasTrailer?: boolean;
+  /** Whether to suppress search-sourced pictures. */
+  noPicturesFromSearch?: boolean;
+  /** Like timestamp (ISO 8601), present in a likes context. */
+  timestamp?: string;
+  /** Artist trailer descriptor (free-form raw JSON, pending a typed model). */
+  trailer?: JSONValue;
+  /** Donation/support info (free-form raw JSON, pending a typed model). */
+  donationInfo?: JSONValue;
+  /** Extra page actions (free-form raw JSON, pending a typed model). */
+  extraActions?: JSONValue;
+  /** Decomposed name parts (names + separators; free-form raw JSON). */
+  decomposed?: JSONValue;
 
   /**
    * Deserialize an {@link Artist}.
@@ -166,6 +185,13 @@ export class Artist extends YandexMusicModel {
       'endDate',
       'yaMoneyId',
       'disclaimers',
+      'hasTrailer',
+      'noPicturesFromSearch',
+      'timestamp',
+      'trailer',
+      'donationInfo',
+      'extraActions',
+      'decomposed',
     ]);
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
     model.counts = Counts.deJson(raw['counts'], client) ?? undefined;
@@ -175,6 +201,8 @@ export class Artist extends YandexMusicModel {
     model.description = Description.deJson(raw['description'], client) ?? undefined;
     model.contentRestrictions = ContentRestrictions.deJson(raw['contentRestrictions'], client) ?? undefined;
     model.cutoutCover = Cover.deJson(raw['cutoutCover'], client) ?? undefined;
+    model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
+    reportUnknown(client, 'Artist', raw, model);
     return model;
   }
 }

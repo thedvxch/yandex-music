@@ -11,6 +11,7 @@ import { Fade, LyricsInfo, Major, MetaData, Normalization, PoetryLoverMatch, R12
 // ES module evaluation order is safe.
 import { Artist } from '../artist/artist.js';
 import { Album } from '../album/album.js';
+import { Chart } from '../landing/landing.js';
 import type { DownloadInfo, LosslessDownloadInfo, SimilarTracks, TrackFullInfo, TrackLyrics } from './extras.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -124,6 +125,8 @@ export class Track extends YandexMusicModel {
   podcastEpisodeType?: string;
   /** Publication date (podcast episodes only, ISO 8601). */
   pubDate?: string;
+  /** Chart standing, present when the track comes from a chart context. */
+  chart?: Chart;
 
   /**
    * Deserialize a {@link Track}.
@@ -190,6 +193,7 @@ export class Track extends YandexMusicModel {
     model.fade = Fade.deJson(raw['fade'], client) ?? undefined;
     model.smartPreviewParams = SmartPreviewParams.deJson(raw['smartPreviewParams'], client) ?? undefined;
     model.r128 = R128.deJson(raw['r128'], client) ?? undefined;
+    model.chart = Chart.deJson(raw['chart'], client) ?? undefined;
     reportUnknown(client, 'Track', raw, model);
     return model;
   }

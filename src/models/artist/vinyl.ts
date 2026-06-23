@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../../base.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -33,6 +33,7 @@ export class Vinyl extends YandexMusicModel {
     }
     const model = new Vinyl(client);
     assign(model, raw, ['url', 'title', 'year', 'price', 'media', 'offerId', 'artistIds', 'picture']);
+    reportUnknown(client, 'Vinyl', raw, model);
     return model;
   }
 }

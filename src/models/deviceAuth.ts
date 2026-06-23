@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, isJsonObject } from '../base.js';
+import { YandexMusicModel, isJsonObject, reportUnknown } from '../base.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -48,6 +48,7 @@ export class DeviceCode extends YandexMusicModel {
     model.verificationUrl = pick(raw, 'verification_url', 'verificationUrl');
     model.expiresIn = pick(raw, 'expires_in', 'expiresIn');
     model.interval = pick(raw, 'interval', 'interval');
+    reportUnknown(client, 'DeviceCode', raw, model);
     return model;
   }
 }
@@ -73,6 +74,7 @@ export class OAuthToken extends YandexMusicModel {
     model.refreshToken = pick(raw, 'refresh_token', 'refreshToken');
     model.expiresIn = pick(raw, 'expires_in', 'expiresIn');
     model.tokenType = pick(raw, 'token_type', 'tokenType');
+    reportUnknown(client, 'OAuthToken', raw, model);
     return model;
   }
 }

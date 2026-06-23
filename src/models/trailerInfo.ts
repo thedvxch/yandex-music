@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
 import { Track } from './track/track.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
@@ -23,6 +23,7 @@ export class TrailerInfo extends YandexMusicModel {
     const model = new TrailerInfo(client);
     assign(model, raw, ['title']);
     model.tracks = deList(Track.deJson, raw['tracks'], client);
+    reportUnknown(client, 'TrailerInfo', raw, model);
     return model;
   }
 }

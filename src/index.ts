@@ -28,6 +28,7 @@ export type { Sign, FileInfoSign } from './signRequest.js';
 // Base model machinery
 export { YandexMusicModel, deList, isJsonObject, assign, reportUnknown } from './base.js';
 export type { JSONObject, JSONValue, DeJson } from './types.js';
+export type { UnknownFieldsReport, UnknownFieldReporter } from './base.js';
 
 // Exceptions
 export {
@@ -163,6 +164,7 @@ export {
   StationResult,
   Dashboard,
   Sequence,
+  TrackParameters,
   StationTracksResult,
   Restrictions,
   Enum,

@@ -4,7 +4,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { User } from '../user.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -25,6 +25,7 @@ export class Permissions extends YandexMusicModel {
     }
     const model = new Permissions(client);
     assign(model, raw, ['until', 'values', 'default']);
+    reportUnknown(client, 'Permissions', raw, model);
     return model;
   }
 }
@@ -35,6 +36,8 @@ export class Plus extends YandexMusicModel {
   hasPlus?: boolean;
   /** Whether the onboarding tutorial is completed. */
   isTutorialCompleted?: boolean;
+  /** Whether the account was migrated to the current Plus subscription. */
+  migrated?: boolean;
 
   /** @see {@link Plus} */
   static deJson(raw: JSONValue | undefined, client?: Client): Plus | null {
@@ -42,7 +45,8 @@ export class Plus extends YandexMusicModel {
       return null;
     }
     const model = new Plus(client);
-    assign(model, raw, ['hasPlus', 'isTutorialCompleted']);
+    assign(model, raw, ['hasPlus', 'isTutorialCompleted', 'migrated']);
+    reportUnknown(client, 'Plus', raw, model);
     return model;
   }
 }
@@ -61,6 +65,7 @@ export class Price extends YandexMusicModel {
     }
     const model = new Price(client);
     assign(model, raw, ['amount', 'currency']);
+    reportUnknown(client, 'Price', raw, model);
     return model;
   }
 }
@@ -79,6 +84,7 @@ export class LicenceTextPart extends YandexMusicModel {
     }
     const model = new LicenceTextPart(client);
     assign(model, raw, ['text', 'url']);
+    reportUnknown(client, 'LicenceTextPart', raw, model);
     return model;
   }
 }
@@ -181,6 +187,7 @@ export class Product extends YandexMusicModel {
     model.introPrice = Price.deJson(raw['introPrice'], client) ?? undefined;
     model.startPrice = Price.deJson(raw['startPrice'], client) ?? undefined;
     model.licenceTextParts = deList(LicenceTextPart.deJson, raw['licenceTextParts'], client);
+    reportUnknown(client, 'Product', raw, model);
     return model;
   }
 }
@@ -213,6 +220,7 @@ export class AutoRenewable extends YandexMusicModel {
     assign(model, raw, ['expires', 'vendor', 'vendorHelpUrl', 'finished', 'productId', 'orderId']);
     model.product = Product.deJson(raw['product'], client) ?? undefined;
     model.masterInfo = User.deJson(raw['masterInfo'], client) ?? undefined;
+    reportUnknown(client, 'AutoRenewable', raw, model);
     return model;
   }
 }
@@ -231,6 +239,7 @@ export class NonAutoRenewable extends YandexMusicModel {
     }
     const model = new NonAutoRenewable(client);
     assign(model, raw, ['start', 'end']);
+    reportUnknown(client, 'NonAutoRenewable', raw, model);
     return model;
   }
 }
@@ -247,6 +256,7 @@ export class RenewableRemainder extends YandexMusicModel {
     }
     const model = new RenewableRemainder(client);
     assign(model, raw, ['days']);
+    reportUnknown(client, 'RenewableRemainder', raw, model);
     return model;
   }
 }
@@ -265,6 +275,7 @@ export class Deactivation extends YandexMusicModel {
     }
     const model = new Deactivation(client);
     assign(model, raw, ['method', 'instructions']);
+    reportUnknown(client, 'Deactivation', raw, model);
     return model;
   }
 }
@@ -292,6 +303,7 @@ export class Operator extends YandexMusicModel {
     const model = new Operator(client);
     assign(model, raw, ['productId', 'phone', 'paymentRegularity', 'title', 'suspended']);
     model.deactivation = deList(Deactivation.deJson, raw['deactivation'], client);
+    reportUnknown(client, 'Operator', raw, model);
     return model;
   }
 }
@@ -329,6 +341,7 @@ export class Subscription extends YandexMusicModel {
     model.familyAutoRenewable = deList(AutoRenewable.deJson, raw['familyAutoRenewable'], client);
     model.operator = deList(Operator.deJson, raw['operator'], client);
     model.nonAutoRenewable = NonAutoRenewable.deJson(raw['nonAutoRenewable'], client) ?? undefined;
+    reportUnknown(client, 'Subscription', raw, model);
     return model;
   }
 }

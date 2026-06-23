@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../../base.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -21,6 +21,7 @@ export class Major extends YandexMusicModel {
     }
     const model = new Major(client);
     assign(model, raw, ['id', 'name']);
+    reportUnknown(client, 'Major', raw, model);
     return model;
   }
 }
@@ -39,6 +40,7 @@ export class Normalization extends YandexMusicModel {
     }
     const model = new Normalization(client);
     assign(model, raw, ['gain', 'peak']);
+    reportUnknown(client, 'Normalization', raw, model);
     return model;
   }
 }
@@ -59,6 +61,7 @@ export class PoetryLoverMatch extends YandexMusicModel {
     }
     const model = new PoetryLoverMatch(client);
     assign(model, raw, ['begin', 'end', 'line']);
+    reportUnknown(client, 'PoetryLoverMatch', raw, model);
     return model;
   }
 }
@@ -77,6 +80,7 @@ export class LyricsInfo extends YandexMusicModel {
     }
     const model = new LyricsInfo(client);
     assign(model, raw, ['hasAvailableSyncLyrics', 'hasAvailableTextLyrics']);
+    reportUnknown(client, 'LyricsInfo', raw, model);
     return model;
   }
 }
@@ -99,6 +103,7 @@ export class Fade extends YandexMusicModel {
     }
     const model = new Fade(client);
     assign(model, raw, ['inStart', 'inStop', 'outStart', 'outStop']);
+    reportUnknown(client, 'Fade', raw, model);
     return model;
   }
 }
@@ -118,6 +123,7 @@ export class SmartPreviewParams extends YandexMusicModel {
     const model = new SmartPreviewParams(client);
     assign(model, raw, ['durationMs']);
     model.fade = Fade.deJson(raw['fade'], client) ?? undefined;
+    reportUnknown(client, 'SmartPreviewParams', raw, model);
     return model;
   }
 }
@@ -148,6 +154,7 @@ export class MetaData extends YandexMusicModel {
     }
     const model = new MetaData(client);
     assign(model, raw, ['album', 'volume', 'year', 'number', 'genre', 'lyricist', 'version', 'composer']);
+    reportUnknown(client, 'MetaData', raw, model);
     return model;
   }
 }
@@ -166,6 +173,7 @@ export class R128 extends YandexMusicModel {
     }
     const model = new R128(client);
     assign(model, raw, ['i', 'tp']);
+    reportUnknown(client, 'R128', raw, model);
     return model;
   }
 }
@@ -186,6 +194,7 @@ export class LyricsMajor extends YandexMusicModel {
     }
     const model = new LyricsMajor(client);
     assign(model, raw, ['id', 'name', 'prettyName']);
+    reportUnknown(client, 'LyricsMajor', raw, model);
     return model;
   }
 }

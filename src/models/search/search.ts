@@ -72,6 +72,7 @@ export class SearchResult<T extends SearchEntity = SearchEntity> extends YandexM
       model.type = type;
     }
     model.results = deList(deJson, raw['results'], client);
+    reportUnknown(client, 'SearchResult', raw, model);
     return model;
   }
 }
@@ -94,6 +95,7 @@ export class Best extends YandexMusicModel {
     assign(model, raw, ['type', 'text']);
     const deJson = typeof model.type === 'string' ? TYPE_TO_DEJSON[model.type] : undefined;
     model.result = deJson ? (deJson(raw['result'], client) ?? undefined) : undefined;
+    reportUnknown(client, 'Best', raw, model);
     return model;
   }
 }
@@ -113,6 +115,7 @@ export class Suggestions extends YandexMusicModel {
     const model = new Suggestions(client);
     assign(model, raw, ['suggestions']);
     model.best = Best.deJson(raw['best'], client) ?? undefined;
+    reportUnknown(client, 'Suggestions', raw, model);
     return model;
   }
 }

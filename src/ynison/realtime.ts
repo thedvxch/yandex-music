@@ -99,10 +99,18 @@ export interface RealtimeOptions {
   /** Maximum reconnect backoff in ms. Defaults to `30000`. */
   reconnectMaxMs?: number;
   /**
-   * Force a reconnect when no state frame has arrived for this many ms, even
-   * while the socket looks open (a silent broken pipe with no TCP reset). `0`
-   * (the default) disables the watchdog. A now-playing watcher typically sets
-   * this to ~120000.
+   * Force a reconnect when the WebSocket shows no activity — no frame, ping or
+   * pong — for this many ms, which means a silently broken pipe with no TCP
+   * reset. `0` (the default) disables the watchdog. A now-playing watcher
+   * typically sets this to ~120000.
+   *
+   * @remarks
+   * This watches transport liveness (kept fresh by the ~20s keep-alive
+   * ping/pong), not state-frame arrival: Ynison only pushes a state frame on an
+   * actual state change, so a paused or idle player is legitimately silent for
+   * minutes while the connection is perfectly healthy. Tearing such a connection
+   * down on state-frame silence triggers a reconnect storm that the server
+   * answers with rate-limiting and host rebalancing.
    */
   staleTimeoutMs?: number;
   /** Optional resolver mapping a playable id to a {@link Track} for `trackChange`. */
@@ -280,9 +288,12 @@ export class RealtimeClient extends EventEmitter {
   }
 
   /**
-   * Poll for silent sessions: if no frame has arrived for `staleTimeoutMs`, tear
-   * the socket down so {@link start} reconnects. Returns the timer handle (or
-   * `null` when disabled) for the caller to clear.
+   * Poll for a dead transport: if the socket has shown no activity (frame, ping
+   * or pong) for `staleTimeoutMs`, tear it down so {@link start} reconnects.
+   * Liveness comes from {@link YnisonClient.lastActivityAt} (kept fresh by the
+   * keep-alive ping/pong), not from state-frame arrival — see
+   * {@link RealtimeOptions.staleTimeoutMs}. Returns the timer handle (or `null`
+   * when disabled) for the caller to clear.
    */
   private startStaleWatchdog(client: YnisonClient): ReturnType<typeof setInterval> | null {
     const staleMs = this.opts.staleTimeoutMs ?? 0;
@@ -291,7 +302,10 @@ export class RealtimeClient extends EventEmitter {
     }
     const tick = Math.max(1000, Math.floor(staleMs / 4));
     return setInterval(() => {
-      const idle = Date.now() - this.lastStateAt;
+      // before the socket opens lastActivityAt is 0; fall back to the session
+      // start so a never-opening connection still trips the watchdog.
+      const since = client.lastActivityAt || this.lastStateAt;
+      const idle = Date.now() - since;
       if (idle > staleMs) {
         this.emit('stale', idle);
         client.disconnect();

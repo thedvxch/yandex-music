@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../base.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -51,6 +51,7 @@ export class Video extends YandexMusicModel {
       'htmlAutoPlayVideoPlayer',
       'regions',
     ]);
+    reportUnknown(client, 'Video', raw, model);
     return model;
   }
 }

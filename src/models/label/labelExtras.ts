@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Album } from '../album/album.js';
 import { Artist } from '../artist/artist.js';
 import { Pager } from '../pager.js';
@@ -25,6 +25,7 @@ export class LabelAlbums extends YandexMusicModel {
     const model = new LabelAlbums(client);
     model.albums = deList(Album.deJson, raw['albums'], client);
     model.pager = Pager.deJson(raw['pager'], client) ?? undefined;
+    reportUnknown(client, 'LabelAlbums', raw, model);
     return model;
   }
 }
@@ -44,6 +45,7 @@ export class LabelArtists extends YandexMusicModel {
     const model = new LabelArtists(client);
     model.artists = deList(Artist.deJson, raw['artists'], client);
     model.pager = Pager.deJson(raw['pager'], client) ?? undefined;
+    reportUnknown(client, 'LabelArtists', raw, model);
     return model;
   }
 }

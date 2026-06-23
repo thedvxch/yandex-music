@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
 import { ContentRestrictions, Cover } from './common.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
@@ -26,6 +26,22 @@ export class PinData extends YandexMusicModel {
   cover?: Cover;
   /** Content availability restrictions. */
   contentRestrictions?: ContentRestrictions;
+  /** Station id (wave pins). */
+  stationId?: string;
+  /** Wave agent (wave pins). */
+  agent?: string;
+  /** Animated cover URL (wave pins). */
+  animationUrl?: string;
+  /** Background image URI template (wave pins). */
+  backgroundImageUrl?: string;
+  /** Content warning marker (wave pins). */
+  contentWarning?: string;
+  /** Theme colors (wave pins; free-form raw JSON). */
+  colors?: JSONValue;
+  /** Header descriptor (wave pins; free-form raw JSON). */
+  header?: JSONValue;
+  /** Wave seeds (wave pins; free-form raw JSON). */
+  seeds?: JSONValue;
 
   /** @see {@link PinData} */
   static deJson(raw: JSONValue | undefined, client?: Client): PinData | null {
@@ -33,9 +49,25 @@ export class PinData extends YandexMusicModel {
       return null;
     }
     const model = new PinData(client);
-    assign(model, raw, ['id', 'uid', 'kind', 'playlistUuid', 'name', 'title']);
+    assign(model, raw, [
+      'id',
+      'uid',
+      'kind',
+      'playlistUuid',
+      'name',
+      'title',
+      'stationId',
+      'agent',
+      'animationUrl',
+      'backgroundImageUrl',
+      'contentWarning',
+      'colors',
+      'header',
+      'seeds',
+    ]);
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
     model.contentRestrictions = ContentRestrictions.deJson(raw['contentRestrictions'], client) ?? undefined;
+    reportUnknown(client, 'PinData', raw, model);
     return model;
   }
 }
@@ -55,6 +87,7 @@ export class Pin extends YandexMusicModel {
     const model = new Pin(client);
     assign(model, raw, ['type']);
     model.data = PinData.deJson(raw['data'], client) ?? undefined;
+    reportUnknown(client, 'Pin', raw, model);
     return model;
   }
 }
@@ -71,6 +104,7 @@ export class PinsList extends YandexMusicModel {
     }
     const model = new PinsList(client);
     model.pins = deList(Pin.deJson, raw['pins'], client);
+    reportUnknown(client, 'PinsList', raw, model);
     return model;
   }
 }

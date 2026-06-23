@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../base.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -21,6 +21,7 @@ export class ForeignAgent extends YandexMusicModel {
     }
     const model = new ForeignAgent(client);
     assign(model, raw, ['reason', 'title']);
+    reportUnknown(client, 'ForeignAgent', raw, model);
     return model;
   }
 }
@@ -37,6 +38,7 @@ export class Disclaimer extends YandexMusicModel {
     }
     const model = new Disclaimer(client);
     model.foreignAgent = ForeignAgent.deJson(raw['foreignAgent'], client) ?? undefined;
+    reportUnknown(client, 'Disclaimer', raw, model);
     return model;
   }
 }

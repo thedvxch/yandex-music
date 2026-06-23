@@ -5,7 +5,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Track } from '../track/track.js';
 import { TrailerInfo } from '../trailerInfo.js';
 import { Playlist } from './playlist.js';
@@ -27,6 +27,7 @@ export class PlaylistRecommendations extends YandexMusicModel {
     const model = new PlaylistRecommendations(client);
     assign(model, raw, ['batchId']);
     model.tracks = deList(Track.deJson, raw['tracks'], client);
+    reportUnknown(client, 'PlaylistRecommendations', raw, model);
     return model;
   }
 }
@@ -43,6 +44,7 @@ export class PlaylistSimilarEntities extends YandexMusicModel {
     }
     const model = new PlaylistSimilarEntities(client);
     model.items = Array.isArray(raw['items']) ? (raw['items'] as JSONValue[]) : undefined;
+    reportUnknown(client, 'PlaylistSimilarEntities', raw, model);
     return model;
   }
 }
@@ -59,6 +61,7 @@ export class PlaylistsList extends YandexMusicModel {
     }
     const model = new PlaylistsList(client);
     model.playlists = deList(Playlist.deJson, raw['playlists'], client);
+    reportUnknown(client, 'PlaylistsList', raw, model);
     return model;
   }
 }
@@ -81,6 +84,7 @@ export class PlaylistTrailer extends YandexMusicModel {
     assign(model, raw, ['shareable']);
     model.playlist = Playlist.deJson(raw['playlist'], client) ?? undefined;
     model.trailer = TrailerInfo.deJson(raw['trailer'], client) ?? undefined;
+    reportUnknown(client, 'PlaylistTrailer', raw, model);
     return model;
   }
 }
@@ -115,6 +119,7 @@ export class GeneratedPlaylist extends YandexMusicModel {
     assign(model, raw, ['type', 'ready', 'notify', 'previewDescription']);
     model.description = Array.isArray(raw['description']) ? (raw['description'] as JSONValue[]) : undefined;
     model.data = Playlist.deJson(raw['data'], client) ?? undefined;
+    reportUnknown(client, 'GeneratedPlaylist', raw, model);
     return model;
   }
 }

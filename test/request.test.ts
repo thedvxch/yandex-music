@@ -114,6 +114,40 @@ describe('transport failures', () => {
       expect.objectContaining({ name: 'NetworkError', cause: boom }),
     );
   });
+
+  // Regression: the body read (arrayBuffer) runs INSIDE the try, under the same
+  // abort deadline as the fetch — a stalled body stream that aborts mid-read must
+  // surface as TimedOutError, not hang and not degrade to NetworkError.
+  test('an AbortError while reading the body surfaces as TimedOutError', async () => {
+    const fetchImpl: FetchLike = async () => ({
+      status: 200,
+      arrayBuffer: async () => {
+        const abort = new Error('aborted body');
+        abort.name = 'AbortError';
+        throw abort;
+      },
+    });
+    await expect(new Request({ fetch: fetchImpl }).get('http://x')).rejects.toBeInstanceOf(TimedOutError);
+  });
+
+  // Regression: a body stream that never completes is cut off by the timeout
+  // firing the abort signal, so retrieve() rejects with TimedOutError instead of
+  // hanging forever (broken pipe with no TCP reset).
+  test('a stalled body stream is aborted by the deadline on retrieve()', async () => {
+    const fetchImpl: FetchLike = async (_url, init) => ({
+      status: 200,
+      arrayBuffer: () =>
+        new Promise<ArrayBuffer>((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            const abort = new Error('aborted body');
+            abort.name = 'AbortError';
+            reject(abort);
+          });
+        }),
+    });
+    const r = new Request({ fetch: fetchImpl, timeout: 20 });
+    await expect(r.retrieve('http://x', 20)).rejects.toBeInstanceOf(TimedOutError);
+  });
 });
 
 test('a custom fetch receives the signed headers and URL', async () => {

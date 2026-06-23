@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../base.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -33,6 +33,7 @@ export class CoverDerivedColors extends YandexMusicModel {
     }
     const model = new CoverDerivedColors(client);
     assign(model, raw, ['average', 'waveText', 'miniPlayer', 'accent']);
+    reportUnknown(client, 'CoverDerivedColors', raw, model);
     return model;
   }
 }
@@ -102,6 +103,7 @@ export class Cover extends YandexMusicModel {
       'videoUrl',
     ]);
     model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
+    reportUnknown(client, 'Cover', raw, model);
     return model;
   }
 }
@@ -128,6 +130,7 @@ export class Icon extends YandexMusicModel {
     }
     const model = new Icon(client);
     assign(model, raw, ['backgroundColor', 'imageUrl']);
+    reportUnknown(client, 'Icon', raw, model);
     return model;
   }
 }
@@ -138,8 +141,14 @@ export class Icon extends YandexMusicModel {
 export class Link extends YandexMusicModel {
   /** Display title of the link. */
   title?: string;
-  /** Target URL. */
+  /** Target URL (artist/album external links). */
   href?: string;
+  /** Target URL (alternative key used by some link endpoints). */
+  url?: string;
+  /** Image URL accompanying the link. */
+  imgUrl?: string;
+  /** Secondary line of text. */
+  subtitle?: string;
   /** Link kind, for example `official` or `social`. */
   type?: string;
   /** Social network name, when `type` is `social`. */
@@ -157,7 +166,8 @@ export class Link extends YandexMusicModel {
       return null;
     }
     const model = new Link(client);
-    assign(model, raw, ['title', 'href', 'type', 'socialNetwork']);
+    assign(model, raw, ['title', 'href', 'url', 'imgUrl', 'subtitle', 'type', 'socialNetwork']);
+    reportUnknown(client, 'Link', raw, model);
     return model;
   }
 }
@@ -184,6 +194,7 @@ export class ContentRestrictions extends YandexMusicModel {
     }
     const model = new ContentRestrictions(client);
     assign(model, raw, ['available', 'disclaimers']);
+    reportUnknown(client, 'ContentRestrictions', raw, model);
     return model;
   }
 }

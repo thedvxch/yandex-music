@@ -7,7 +7,7 @@
  *
  * @packageDocumentation
  */
-import { deList } from './base.js';
+import { deList, type UnknownFieldReporter } from './base.js';
 import { Request, type FetchLike } from './request.js';
 import type { Client } from './client.js';
 import type { Status } from './models/account/account.js';
@@ -42,10 +42,18 @@ export interface ClientOptions {
   /** Response language. Defaults to `ru`. One of `en`/`uz`/`uk`/`us`/`ru`/`kk`/`hy`. */
   language?: string;
   /**
-   * When `true`, log a warning whenever the API returns a field the library
-   * does not yet model. Useful for spotting upstream API changes.
+   * When `true`, log a warning (via `console.warn`) whenever the API returns a
+   * field the library does not yet model. Useful for spotting upstream API
+   * changes. Ignored when {@link ClientOptions.onUnknownField} is set.
    */
   reportUnknownFields?: boolean;
+  /**
+   * A hook called whenever the API returns fields the library does not model.
+   * Setting it enables detection (no need to also set `reportUnknownFields`) and
+   * routes reports here instead of to `console.warn` — wire it to your logger,
+   * metrics or a test assertion.
+   */
+  onUnknownField?: UnknownFieldReporter;
 }
 
 /** Object types addressable through the batch "list" endpoints. */
@@ -65,6 +73,8 @@ export abstract class ClientBase {
   device: string = DEFAULT_DEVICE;
   /** Whether unknown-field warnings are enabled. */
   reportUnknownFields: boolean;
+  /** Optional hook for unmapped-field reports; see {@link ClientOptions.onUnknownField}. */
+  onUnknownField?: UnknownFieldReporter;
   /** Account status, populated by {@link Client.init}. */
   me?: Status;
   /** Account uid, populated by {@link Client.init}. */
@@ -81,6 +91,7 @@ export abstract class ClientBase {
     this.language = options.language ?? 'ru';
     this.device = options.device ?? DEFAULT_DEVICE;
     this.reportUnknownFields = options.reportUnknownFields ?? false;
+    this.onUnknownField = options.onUnknownField;
 
     if (options.request) {
       this.request = options.request;

@@ -19,6 +19,12 @@ export class Value extends YandexMusicModel {
   value?: string;
   /** Human-readable name. */
   name?: string;
+  /** Image URL (rich restriction values: moods, activities). */
+  imageUrl?: string;
+  /** Serialized seed used to start a wave from this value. */
+  serializedSeed?: string;
+  /** Whether this value represents the "unspecified" option. */
+  unspecified?: boolean;
 
   /** @see {@link Value} */
   static deJson(raw: JSONValue | undefined, client?: Client): Value | null {
@@ -26,7 +32,8 @@ export class Value extends YandexMusicModel {
       return null;
     }
     const model = new Value(client);
-    assign(model, raw, ['value', 'name']);
+    assign(model, raw, ['value', 'name', 'imageUrl', 'serializedSeed', 'unspecified']);
+    reportUnknown(client, 'Value', raw, model);
     return model;
   }
 }
@@ -48,6 +55,7 @@ export class Enum extends YandexMusicModel {
     const model = new Enum(client);
     assign(model, raw, ['type', 'name']);
     model.possibleValues = deList(Value.deJson, raw['possibleValues'], client);
+    reportUnknown(client, 'Enum', raw, model);
     return model;
   }
 }
@@ -72,6 +80,7 @@ export class DiscreteScale extends YandexMusicModel {
     assign(model, raw, ['type', 'name']);
     model.min = Value.deJson(raw['min'], client) ?? undefined;
     model.max = Value.deJson(raw['max'], client) ?? undefined;
+    reportUnknown(client, 'DiscreteScale', raw, model);
     return model;
   }
 }
@@ -100,6 +109,7 @@ export class Restrictions extends YandexMusicModel {
     model.mood = DiscreteScale.deJson(raw['mood'], client) ?? undefined;
     model.energy = DiscreteScale.deJson(raw['energy'], client) ?? undefined;
     model.moodEnergy = Enum.deJson(raw['moodEnergy'], client) ?? undefined;
+    reportUnknown(client, 'Restrictions', raw, model);
     return model;
   }
 }
@@ -139,6 +149,7 @@ export class AdParams extends YandexMusicModel {
       'genreId',
       'genreName',
     ]);
+    reportUnknown(client, 'AdParams', raw, model);
     return model;
   }
 }
@@ -157,6 +168,7 @@ export class Id extends YandexMusicModel {
     }
     const model = new Id(client);
     assign(model, raw, ['type', 'tag']);
+    reportUnknown(client, 'Id', raw, model);
     return model;
   }
 }
@@ -177,6 +189,8 @@ export class Station extends YandexMusicModel {
   idForFrom?: string;
   /** Playback restrictions (personalization options). */
   restrictions?: Restrictions;
+  /** Newer playback restrictions (enum-typed personalization options). */
+  restrictions2?: Restrictions;
   /** Full image URL. */
   fullImageUrl?: string;
   /** MTS full image URL. */
@@ -192,11 +206,13 @@ export class Station extends YandexMusicModel {
     const model = new Station(client);
     assign(model, raw, ['name', 'idForFrom', 'fullImageUrl', 'mtsFullImageUrl']);
     model.restrictions = Restrictions.deJson(raw['restrictions'], client) ?? undefined;
+    model.restrictions2 = Restrictions.deJson(raw['restrictions2'], client) ?? undefined;
     model.id = Id.deJson(raw['id'], client) ?? undefined;
     model.icon = Icon.deJson(raw['icon'], client) ?? undefined;
     model.mtsIcon = Icon.deJson(raw['mtsIcon'], client) ?? undefined;
     model.geocellIcon = Icon.deJson(raw['geocellIcon'], client) ?? undefined;
     model.parentId = Id.deJson(raw['parentId'], client) ?? undefined;
+    reportUnknown(client, 'Station', raw, model);
     return model;
   }
 }
@@ -253,11 +269,33 @@ export class Dashboard extends YandexMusicModel {
     const model = new Dashboard(client);
     assign(model, raw, ['dashboardId', 'pumpkin']);
     model.stations = deList(StationResult.deJson, raw['stations'], client);
+    reportUnknown(client, 'Dashboard', raw, model);
     return model;
   }
 }
 
 /** One track in a station's playback sequence. */
+/** Acoustic parameters of a track within a radio sequence. */
+export class TrackParameters extends YandexMusicModel {
+  /** Beats per minute. */
+  bpm?: number;
+  /** Cover-derived hue. */
+  hue?: number;
+  /** Energy level. */
+  energy?: number;
+
+  /** @see {@link TrackParameters} */
+  static deJson(raw: JSONValue | undefined, client?: Client): TrackParameters | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new TrackParameters(client);
+    assign(model, raw, ['bpm', 'hue', 'energy']);
+    reportUnknown(client, 'TrackParameters', raw, model);
+    return model;
+  }
+}
+
 export class Sequence extends YandexMusicModel {
   /** Sequence item type, for example `track`. */
   type?: string;
@@ -265,6 +303,8 @@ export class Sequence extends YandexMusicModel {
   track?: Track;
   /** Whether the user has liked the track. */
   liked?: boolean;
+  /** Acoustic parameters of the track in this sequence. */
+  trackParameters?: TrackParameters;
 
   /** @see {@link Sequence} */
   static deJson(raw: JSONValue | undefined, client?: Client): Sequence | null {
@@ -274,6 +314,8 @@ export class Sequence extends YandexMusicModel {
     const model = new Sequence(client);
     assign(model, raw, ['type', 'liked']);
     model.track = Track.deJson(raw['track'], client) ?? undefined;
+    model.trackParameters = TrackParameters.deJson(raw['trackParameters'], client) ?? undefined;
+    reportUnknown(client, 'Sequence', raw, model);
     return model;
   }
 }

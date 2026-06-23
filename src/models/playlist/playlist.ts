@@ -142,6 +142,8 @@ export class Playlist extends YandexMusicModel {
   regions?: JSONValue[];
   /** Artist-playlist kind, when this is an artist's playlist. */
   artistPlaylistType?: string;
+  /** Call-to-action button (free-form raw JSON, pending a typed model). */
+  actionButton?: JSONValue;
 
   /** @see {@link Playlist} */
   static deJson(raw: JSONValue | undefined, client?: Client): Playlist | null {
@@ -190,6 +192,7 @@ export class Playlist extends YandexMusicModel {
       'backgroundImageUrl',
       'regions',
       'artistPlaylistType',
+      'actionButton',
     ]);
     model.owner = User.deJson(raw['owner'], client) ?? undefined;
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;

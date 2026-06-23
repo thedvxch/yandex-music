@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject } from '../base.js';
+import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
 import { Album } from './album/album.js';
 import { Artist } from './artist/artist.js';
 import { Playlist } from './playlist/playlist.js';
@@ -44,6 +44,7 @@ export class Like extends YandexMusicModel {
     model.album = Album.deJson(raw['album'], client) ?? undefined;
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.playlist = Playlist.deJson(raw['playlist'], client) ?? undefined;
+    reportUnknown(client, 'Like', raw, model);
     return model;
   }
 }
@@ -54,6 +55,8 @@ export class TracksList extends YandexMusicModel {
   uid?: number;
   /** Library revision. */
   revision?: number;
+  /** Stable UUID of the backing playlist (the "Liked tracks" playlist). */
+  playlistUuid?: string;
   /** The track references. */
   tracks?: TrackShort[];
 
@@ -63,8 +66,9 @@ export class TracksList extends YandexMusicModel {
       return null;
     }
     const model = new TracksList(client);
-    assign(model, raw, ['uid', 'revision']);
+    assign(model, raw, ['uid', 'revision', 'playlistUuid']);
     model.tracks = deList(TrackShort.deJson, raw['tracks'], client);
+    reportUnknown(client, 'TracksList', raw, model);
     return model;
   }
 }
