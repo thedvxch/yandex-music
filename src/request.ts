@@ -10,6 +10,11 @@
  * @packageDocumentation
  */
 import { writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import type { Transform } from 'node:stream';
+import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import {
   BadRequestError,
   NetworkError,
@@ -52,6 +57,13 @@ export interface ResponseLike {
   status: number;
   /** The response body as bytes. */
   arrayBuffer(): Promise<ArrayBuffer>;
+  /**
+   * The response body as a stream, when the fetch implementation exposes one
+   * (the global `fetch` does). Enables streaming downloads straight to disk; on
+   * minimal fetch shims that omit it, downloads transparently fall back to
+   * buffering via {@link ResponseLike.arrayBuffer}.
+   */
+  body?: ReadableStream<Uint8Array> | null;
 }
 
 /**
@@ -84,6 +96,25 @@ interface Envelope {
   result: JSONValue;
   error?: JSONValue;
   errorDescription?: JSONValue;
+}
+
+/** Internal sentinel: every mirror failed the header race, so fall back to the
+ * sequential retry. Never surfaces to callers. */
+class RaceFailed extends Error {}
+
+/** Run a whole buffer through a Node transform and collect the output (the
+ * in-memory fallback for {@link Request.streamToFile} when no body stream is
+ * available). */
+async function runTransform(transform: Transform, input: Uint8Array): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  const done = new Promise<void>((resolve, reject) => {
+    transform.on('data', (chunk: Buffer) => chunks.push(chunk));
+    transform.on('end', resolve);
+    transform.on('error', reject);
+  });
+  transform.end(input);
+  await done;
+  return new Uint8Array(Buffer.concat(chunks));
 }
 
 /**
@@ -249,14 +280,144 @@ export class Request {
   /**
    * Download a URL straight to a file on disk.
    *
+   * Streams the response body to disk when the fetch implementation exposes a
+   * stream (the global `fetch` does), so memory stays O(chunk) instead of
+   * buffering the whole file and the write overlaps the download. Falls back to
+   * buffering on shims without a body stream.
+   *
    * @param url - Absolute request URL.
    * @param filename - Destination path, including extension.
    * @param timeout - Optional per-call timeout override (milliseconds).
    * @throws {YandexMusicError} On any transport or API error.
    */
   async download(url: string, filename: string, timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS): Promise<void> {
-    const bytes = await this.retrieve(url, timeout);
-    await writeFile(filename, bytes);
+    return this.streamToFile(url, filename, { timeout });
+  }
+
+  /**
+   * Stream a `GET` response straight to a file, optionally piping it through a
+   * transform first (for example an AES-CTR decipher for an `encraw` stream).
+   *
+   * The whole transfer — including the body read and the transform — runs under
+   * a single abort deadline, so a stalled stream is torn down instead of hanging.
+   * When the fetch implementation exposes no body stream, it falls back to
+   * buffering the bytes, running the transform in memory and writing once.
+   *
+   * @param url - Absolute request URL.
+   * @param filename - Destination path, including extension.
+   * @param options - `timeout` (ms) and an optional `transform` stream factory
+   *   (a fresh transform per call, since a transform can't be reused).
+   * @throws {YandexMusicError} On any transport or API error.
+   */
+  async streamToFile(
+    url: string,
+    filename: string,
+    options: { timeout?: number; transform?: () => Transform } = {},
+  ): Promise<void> {
+    const controller = new AbortController();
+    const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
+    const timer = setTimeout(() => controller.abort(), ms);
+    try {
+      const response = await this.openValidated(url, controller.signal);
+      await this.pipeBody(response, filename, options.transform?.());
+    } catch (error) {
+      throw this.wrapTransportError(error);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Stream a `GET` to a file, racing several mirror URLs and committing to the
+   * first that responds — the fastest CDN host wins, cutting tail latency when
+   * one mirror is slow. Losing connections are aborted. If the winning stream
+   * fails mid-download (or every mirror's headers fail), it falls back to trying
+   * the URLs sequentially, so racing never costs robustness.
+   *
+   * @param urls - Candidate mirror URLs (preference order; used for the fallback).
+   * @param filename - Destination path, including extension.
+   * @param options - `timeout` (ms) and an optional `transform` stream factory.
+   * @throws {YandexMusicError} On any transport or API error (after the fallback).
+   */
+  async raceToFile(
+    urls: string[],
+    filename: string,
+    options: { timeout?: number; transform?: () => Transform } = {},
+  ): Promise<void> {
+    if (urls.length <= 1) {
+      return this.streamToFile(urls[0] ?? '', filename, options);
+    }
+    const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
+    const controllers = urls.map(() => new AbortController());
+    const timer = setTimeout(() => controllers.forEach((c) => c.abort()), ms);
+    try {
+      let winner: number;
+      let response: ResponseLike;
+      try {
+        const opened = await Promise.any(
+          urls.map((u, i) => this.openValidated(u, controllers[i]!.signal).then((r) => ({ r, i }))),
+        );
+        winner = opened.i;
+        response = opened.r;
+      } catch {
+        // every mirror failed to respond — fall through to the sequential retry.
+        throw new RaceFailed();
+      }
+      // commit to the winner; drop the losing connections.
+      controllers.forEach((c, i) => i !== winner && c.abort());
+      await this.pipeBody(response, filename, options.transform?.());
+    } catch (error) {
+      // winner stream broke (or no mirror responded): robust sequential fallback.
+      let lastError: unknown = error instanceof RaceFailed ? undefined : error;
+      for (const url of urls) {
+        try {
+          await this.streamToFile(url, filename, options);
+          return;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      throw this.wrapTransportError(lastError);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Open a `GET` and validate a 2xx status, throwing a typed error otherwise. */
+  private async openValidated(url: string, signal: AbortSignal): Promise<ResponseLike> {
+    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
+    const response = await this.fetchImpl(url, { method: 'GET', headers, signal });
+    if (response.status < 200 || response.status > 299) {
+      this.handleErrorResponse(response.status, new Uint8Array(await response.arrayBuffer()));
+    }
+    return response;
+  }
+
+  /** Pipe a response body to a file, through `transform` when given; streams when
+   * the body is a stream, otherwise buffers and writes once. */
+  private async pipeBody(response: ResponseLike, filename: string, transform?: Transform): Promise<void> {
+    const webBody = response.body;
+    if (webBody && typeof (webBody as { getReader?: unknown }).getReader === 'function') {
+      const source = Readable.fromWeb(webBody as NodeWebReadableStream<Uint8Array>);
+      const stages = transform ? [source, transform, createWriteStream(filename)] : [source, createWriteStream(filename)];
+      // `pipeline` propagates the abort (via the stream erroring) and closes
+      // every stage, including the file handle, on success or failure.
+      await pipeline(stages as [Readable, ...NodeJS.WritableStream[]]);
+    } else {
+      const raw = new Uint8Array(await response.arrayBuffer());
+      await writeFile(filename, transform ? await runTransform(transform, raw) : raw);
+    }
+  }
+
+  /** Map a transport-layer throwable to the library's typed errors. */
+  private wrapTransportError(error: unknown): Error {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return new TimedOutError();
+    }
+    if (error instanceof YandexMusicError) {
+      return error;
+    }
+    return new NetworkError(error instanceof Error ? error.message : String(error), { cause: error });
   }
 
   private withQuery(url: string, params?: Params): string {

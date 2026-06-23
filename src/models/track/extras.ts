@@ -3,8 +3,8 @@
  *
  * @packageDocumentation
  */
-import { createHash, createDecipheriv } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { createHash, createDecipheriv, type Decipher } from 'node:crypto';
+import type { Transform } from 'node:stream';
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { LyricsMajor } from './nested.js';
 import { Track } from './track.js';
@@ -135,11 +135,25 @@ export class DownloadInfo extends YandexMusicModel {
  * @returns The decrypted audio bytes.
  */
 export function decryptEncraw(data: Uint8Array, keyHex: string): Uint8Array {
+  const decipher = encrawDecipher(keyHex);
+  return new Uint8Array(Buffer.concat([decipher.update(data), decipher.final()]));
+}
+
+/**
+ * Build the AES-CTR decipher transform for an `encraw` stream from its hex key.
+ *
+ * AES-CTR is a stream cipher, so this can be piped (decrypting on the fly during
+ * a streaming download) as well as run over a whole buffer. The IV is 16 zero
+ * bytes; the key length selects AES-128 vs AES-256.
+ *
+ * @param keyHex - The hex AES-CTR key from `/get-file-info`.
+ * @returns A fresh decipher transform (single-use).
+ */
+export function encrawDecipher(keyHex: string): Decipher {
   const key = Buffer.from(keyHex, 'hex');
   const iv = Buffer.alloc(16);
   const algo = key.length === 32 ? 'aes-256-ctr' : 'aes-128-ctr';
-  const decipher = createDecipheriv(algo, key, iv);
-  return new Uint8Array(Buffer.concat([decipher.update(data), decipher.final()]));
+  return createDecipheriv(algo, key, iv);
 }
 
 /**
@@ -254,13 +268,41 @@ export class LosslessDownloadInfo extends YandexMusicModel {
   }
 
   /**
-   * Download the audio straight to a file on disk (decrypting if needed).
+   * Download the audio straight to a file on disk, streaming it and transparently
+   * AES-CTR-decrypting an `encraw` stream on the fly when {@link key} is present.
+   *
+   * Streaming keeps memory O(chunk) rather than buffering the whole (large, for
+   * lossless) file. Mirror URLs are tried in order, so a flaky host falls back to
+   * the next.
    *
    * @param filename - Destination path, including extension.
-   * @throws {YandexMusicError} On any transport or API error.
+   * @param options - Set `race: true` to race all mirror URLs and commit to the
+   *   fastest responder (cuts tail latency when a host is slow; falls back to
+   *   sequential on failure). Defaults to sequential mirror failover.
+   * @throws {YandexMusicError} On any transport or API error (the last one, after
+   *   every candidate URL fails).
    */
-  async download(filename: string): Promise<void> {
-    await writeFile(filename, await this.downloadBytes());
+  async download(filename: string, options: { race?: boolean } = {}): Promise<void> {
+    const links = this.links();
+    if (links.length === 0) {
+      throw new Error('LosslessDownloadInfo has no stream URL.');
+    }
+    const request = this.requireClient().request;
+    const key = this.key;
+    const transform = key ? (): Transform => encrawDecipher(key) : undefined;
+    if (options.race) {
+      return request.raceToFile(links, filename, { transform });
+    }
+    let lastError: unknown;
+    for (const link of links) {
+      try {
+        await request.streamToFile(link, filename, { transform });
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
   }
 }
 

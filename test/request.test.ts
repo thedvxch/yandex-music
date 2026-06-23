@@ -1,4 +1,8 @@
 import { describe, test, expect } from 'vitest';
+import { readFile, rm, mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createCipheriv, createDecipheriv } from 'node:crypto';
 import {
   Artist,
   Client,
@@ -14,6 +18,31 @@ import {
   YandexMusicError,
   type FetchLike,
 } from '../src/index.js';
+
+// A ResponseLike whose body is a real web ReadableStream emitting the given
+// bytes (in one or more chunks), mirroring what global fetch returns.
+function streamResponse(bytes: Uint8Array, status = 200, chunks = 1): {
+  status: number;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  body: ReadableStream<Uint8Array>;
+} {
+  const size = Math.ceil(bytes.length / chunks);
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (let i = 0; i < bytes.length; i += size) controller.enqueue(bytes.subarray(i, i + size));
+      controller.close();
+    },
+  });
+  return {
+    status,
+    body,
+    arrayBuffer: async () => {
+      const copy = new Uint8Array(bytes.length);
+      copy.set(bytes);
+      return copy.buffer;
+    },
+  };
+}
 
 // Build a Request whose fetch returns a canned body/status — or throws `fail`.
 // No global mocking: the transport takes an injected fetch (the same seam used
@@ -270,5 +299,81 @@ describe('likes return shapes', () => {
     expect(artists[0]).toBeInstanceOf(Artist);
     expect(artists[0]!.name).toBe('Polly');
     expect(artists[0]!.genres).toEqual(['rock']);
+  });
+});
+
+describe('streaming downloads', () => {
+  let dir: string;
+  const file = () => join(dir, `out-${Math.random().toString(36).slice(2)}.bin`);
+
+  test('streamToFile pipes a body stream to disk', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ym-stream-'));
+    const payload = new TextEncoder().encode('hello streaming world'.repeat(100));
+    const r = new Request({ fetch: async () => streamResponse(payload, 200, 4) });
+    const path = file();
+    await r.streamToFile(path, path);
+    expect(new Uint8Array(await readFile(path))).toEqual(payload);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test('streamToFile applies a transform (AES-CTR decipher) on the fly', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ym-stream-'));
+    const key = Buffer.alloc(16, 7);
+    const iv = Buffer.alloc(16);
+    const plain = new TextEncoder().encode('FLAC-ish payload '.repeat(500));
+    const cipher = createCipheriv('aes-128-ctr', key, iv);
+    const encrypted = new Uint8Array(Buffer.concat([cipher.update(plain), cipher.final()]));
+    const r = new Request({ fetch: async () => streamResponse(encrypted, 200, 8) });
+    const path = file();
+    await r.streamToFile(path, path, { transform: () => createDecipheriv('aes-128-ctr', key, iv) });
+    expect(new Uint8Array(await readFile(path))).toEqual(plain);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test('streamToFile falls back to buffering when no body stream is present', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ym-stream-'));
+    const payload = new TextEncoder().encode('no-stream shim path');
+    // ResponseLike without `body` → buffer-and-write fallback.
+    const r = new Request({ fetch: async () => ({ status: 200, arrayBuffer: async () => payload.buffer }) });
+    const path = file();
+    await r.streamToFile(path, path);
+    expect(new Uint8Array(await readFile(path))).toEqual(payload);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test('streamToFile maps a non-2xx status to a typed error', async () => {
+    const r = new Request({ fetch: async () => streamResponse(new TextEncoder().encode('{}'), 404) });
+    await expect(r.streamToFile('http://x', '/tmp/nope-xyz')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  test('raceToFile commits to the first responding mirror', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ym-stream-'));
+    const payload = new TextEncoder().encode('winning mirror payload '.repeat(50));
+    const fetchImpl: FetchLike = async (url) => {
+      if (url.includes('slow')) {
+        await new Promise((res) => setTimeout(res, 50));
+        return streamResponse(new TextEncoder().encode('SLOW'), 200);
+      }
+      return streamResponse(payload, 200, 3);
+    };
+    const r = new Request({ fetch: fetchImpl });
+    const path = file();
+    await r.raceToFile(['http://slow/a', 'http://fast/b'], path, {});
+    expect(new Uint8Array(await readFile(path))).toEqual(payload);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test('raceToFile falls back to a working mirror when others fail to respond', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ym-stream-'));
+    const payload = new TextEncoder().encode('fallback mirror payload');
+    const fetchImpl: FetchLike = async (url) => {
+      if (url.includes('dead')) throw new Error('ECONNREFUSED');
+      return streamResponse(payload, 200);
+    };
+    const r = new Request({ fetch: fetchImpl });
+    const path = file();
+    await r.raceToFile(['http://dead/a', 'http://live/b'], path, {});
+    expect(new Uint8Array(await readFile(path))).toEqual(payload);
+    await rm(dir, { recursive: true, force: true });
   });
 });
