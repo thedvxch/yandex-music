@@ -133,6 +133,28 @@ rt.on('playStateChange', (paused) => console.log(paused ? 'пауза' : 'игр
 await rt.start();   // резолвится, когда вы вызовете rt.stop()
 ```
 
+Для боевого «наблюдателя» удобнее **синхронный снимок** вместо ожидания
+следующего события — например, чтобы ответить на HTTP-запрос прямо сейчас:
+
+```ts
+const rt = client.realtime({
+  staleTimeoutMs: 120_000,   // форс-реконнект, если фреймы замолчали (broken pipe без RST)
+});
+rt.start();                  // не await — крутится до rt.stop()
+
+const np = rt.nowPlaying;    // null до первого фрейма / когда ничего не играет
+if (np?.track) {
+  console.log(np.track.title, np.paused ? '⏸' : '▶',
+    `${Math.round(np.progressMs / 1000)}/${Math.round(np.durationMs / 1000)}s`); // progressMs интерполируется «на сейчас»
+}
+```
+
+`deviceId` по умолчанию генерится один раз и переиспользуется на всех
+реконнектах — **не меняйте его на каждое переподключение**: Ynison дедуплицирует
+рассылку по устройству, и наблюдатель с новым id выпадает из broadcast, а
+состояние молча застывает. Геттеры `state` / `lastStateAgeMs` / `liveProgressMs()`
+дают остальной снимок для `/health`.
+
 ## Примеры
 
 В каталоге [`examples/`](./examples) лежат запускаемые примеры:

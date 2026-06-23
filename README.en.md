@@ -132,6 +132,27 @@ rt.on('playStateChange', (paused) => console.log(paused ? 'paused' : 'playing'))
 await rt.start();   // resolves when you call rt.stop()
 ```
 
+For a production watcher it's easier to read a **synchronous snapshot** than to wait
+for the next event — e.g. to answer an HTTP request right now:
+
+```ts
+const rt = client.realtime({
+  staleTimeoutMs: 120_000,   // force a reconnect if frames go quiet (silent broken pipe)
+});
+rt.start();                  // don't await — it runs until rt.stop()
+
+const np = rt.nowPlaying;    // null before the first frame / when nothing is playing
+if (np?.track) {
+  console.log(np.track.title, np.paused ? '⏸' : '▶',
+    `${Math.round(np.progressMs / 1000)}/${Math.round(np.durationMs / 1000)}s`); // progressMs is live-extrapolated
+}
+```
+
+`deviceId` defaults to an id generated once and reused across reconnects — **don't
+rotate it per reconnect**: Ynison dedupes its broadcast by device, so a fresh id
+drops your observer from the fan-out and the state silently freezes. The `state` /
+`lastStateAgeMs` / `liveProgressMs()` getters give the rest of the snapshot for `/health`.
+
 ## Examples
 
 Runnable examples live in [`examples/`](./examples):
