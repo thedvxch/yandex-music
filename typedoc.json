@@ -6,6 +6,13 @@
   "tsconfig": "tsconfig.build.json",
   "excludeInternal": true,
   "readme": "README.md",
+  "projectDocuments": [
+    "docs/guides/01-getting-started.md",
+    "docs/guides/02-architecture.md",
+    "docs/guides/03-endpoints.md",
+    "docs/guides/04-realtime.md",
+    "docs/guides/05-examples.md"
+  ],
   "githubPages": true,
   "customCss": "docs/theme.css",
   "customJs": "docs/theme.js",
