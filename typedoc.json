@@ -7,8 +7,35 @@
   "excludeInternal": true,
   "readme": "README.md",
   "githubPages": true,
+  "customCss": "docs/theme.css",
+  "customJs": "docs/theme.js",
+  "favicon": "assets/favicon.svg",
+  "customFooterHtml": "<a href=\"https://www.npmjs.com/package/@dvxch/yandex-music\">@dvxch/yandex-music</a> · независимый TypeScript-клиент Yandex Music API · MIT",
   "navigationLinks": {
+    "Документация": "https://gh.dvxch.link/yandex-music/",
     "npm": "https://www.npmjs.com/package/@dvxch/yandex-music",
     "GitHub": "https://github.com/thedvxch/yandex-music"
+  },
+  "categorizeByGroup": true,
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true,
+    "compactFolders": true
+  },
+  "sort": ["kind", "alphabetical"],
+  "kindSortOrder": [
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Function",
+    "Variable",
+    "Enum",
+    "Reference"
+  ],
+  "visibilityFilters": {
+    "protected": false,
+    "private": false,
+    "inherited": true,
+    "external": false
   }
 }

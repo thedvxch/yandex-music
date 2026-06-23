@@ -1,0 +1,285 @@
+/* @dvxch/yandex-music — фирменная тема документации (поверх дефолтной темы TypeDoc 0.28).
+   Бренд: пастельно-фиолетовый. Светлая и тёмная схемы, современная типографика. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ─────────────────────────  Палитра бренда  ───────────────────────── */
+:root {
+  --brand-50: #f5f3ff;
+  --brand-200: #ddd6fe;
+  --brand-300: #c4b5fd;
+  --brand-400: #a78bfa;
+  --brand-500: #8b5cf6;
+  --brand-600: #7c3aed;
+  --brand-pink: #f0abfc;
+  --brand-gradient: linear-gradient(115deg, #c4b5fd 0%, #a78bfa 45%, #f0abfc 100%);
+  --brand-gradient-soft: linear-gradient(135deg, rgba(167, 139, 250, 0.16), rgba(240, 171, 252, 0.12));
+
+  --tsd-radius: 14px;
+  --tsd-radius-sm: 9px;
+
+  /* Светлая схема */
+  --light-color-background: #ffffff;
+  --light-color-background-secondary: #f7f6fc;
+  --light-color-background-active: #efeafc;
+  --light-color-accent: #e9e4f7;
+  --light-color-text: #211d2b;
+  --light-color-text-aside: #6c6680;
+  --light-color-link: #6d28d9;
+  --light-color-active-menu-item: #efe9fe;
+  --light-color-icon-background: #ffffff;
+  --light-color-focus-outline: #a78bfa;
+  --light-color-ts-keyword: #8b5cf6;
+  --light-color-ts-function: #7c3aed;
+  --light-color-ts-class: #b4308f;
+  --light-color-ts-interface: #0e8f7e;
+
+  /* Тёмная схема */
+  --dark-color-background: #131120;
+  --dark-color-background-secondary: #1b1830;
+  --dark-color-background-active: #2a2342;
+  --dark-color-accent: #2c2740;
+  --dark-color-text: #e9e6f4;
+  --dark-color-text-aside: #a59ec0;
+  --dark-color-link: #c4b5fd;
+  --dark-color-active-menu-item: #2a2342;
+  --dark-color-icon-background: #1b1830;
+  --dark-color-focus-outline: #a78bfa;
+  --dark-color-ts-keyword: #c4b5fd;
+  --dark-color-ts-function: #d8b4fe;
+  --dark-color-ts-class: #f0abfc;
+  --dark-color-ts-interface: #5eead4;
+}
+
+/* ─────────────────────────  Типографика  ───────────────────────── */
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3, h4, h5, .tsd-page-title h1 {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+code, pre, .tsd-signature, .tsd-signature-symbol, kbd,
+code.tsd-tag, .tsd-typography code {
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+  font-feature-settings: 'liga' 1, 'calt' 1;
+}
+
+.tsd-typography {
+  line-height: 1.72;
+}
+.tsd-typography p { max-width: 72ch; }
+
+/* ─────────────────────────  Шапка / тулбар  ───────────────────────── */
+.tsd-page-toolbar {
+  background: color-mix(in srgb, var(--color-background) 78%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--color-accent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--brand-400) 14%, transparent);
+}
+
+/* Логотип-знак перед названием проекта */
+.tsd-page-toolbar .title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-size: 1.06rem;
+}
+.tsd-page-toolbar .title::before {
+  content: '';
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  /* фавикон копируется TypeDoc'ом рядом с custom.css → ссылаемся напрямую */
+  background-image: url("./favicon.svg");
+  background-size: cover;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--brand-500) 38%, transparent);
+}
+
+/* ─────────────────────────  Ссылки  ───────────────────────── */
+a { text-decoration-thickness: 1px; text-underline-offset: 2px; transition: color 0.15s ease; }
+.tsd-typography a { text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--color-link) 35%, transparent); }
+.tsd-typography a:hover { color: var(--brand-500); border-bottom-color: var(--brand-500); }
+
+/* ─────────────────────────  Hero (страница README/index)  ───────────────────────── */
+.col-content > .tsd-panel.tsd-typography > h1:first-child,
+.tsd-page-title h1 {
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3rem);
+  line-height: 1.08;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 0.6rem;
+}
+
+/* блок бейджей в README — выровнять и дать воздух */
+.tsd-typography p img[src*='shields.io'] { vertical-align: middle; margin: 0 2px 6px 0; }
+
+/* цитата-«статус» в README → красивый callout */
+.tsd-typography blockquote {
+  border-left: 3px solid var(--brand-400);
+  background: var(--brand-gradient-soft);
+  border-radius: 0 var(--tsd-radius-sm) var(--tsd-radius-sm) 0;
+  padding: 0.85rem 1.1rem;
+  margin: 1.2rem 0;
+  color: var(--color-text);
+}
+
+/* ─────────────────────────  Код  ───────────────────────── */
+pre {
+  border: 1px solid var(--color-accent);
+  border-radius: var(--tsd-radius);
+  background: var(--color-background-secondary) !important;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: auto;
+}
+.tsd-typography code:not(pre code) {
+  background: color-mix(in srgb, var(--brand-400) 14%, transparent);
+  color: color-mix(in srgb, var(--color-text) 88%, var(--brand-600));
+  border-radius: 6px;
+  padding: 0.12em 0.4em;
+  font-size: 0.88em;
+}
+
+/* кнопка «копировать» (добавляется theme.js) */
+pre > button.tsd-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font: 600 11px/1 'Inter', sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-aside);
+  background: var(--color-background);
+  border: 1px solid var(--color-accent);
+  border-radius: 7px;
+  padding: 5px 9px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+pre:hover > button.tsd-copy { opacity: 1; }
+pre > button.tsd-copy:hover { color: var(--brand-500); border-color: var(--brand-400); }
+pre > button.tsd-copy.tsd-copied { color: #0e8f7e; border-color: #5eead4; }
+
+/* ─────────────────────────  Панели / карточки / навигация  ───────────────────────── */
+.tsd-panel {
+  border: 1px solid var(--color-accent);
+  border-radius: var(--tsd-radius);
+  padding: 1.1rem 1.3rem;
+}
+
+.tsd-signature {
+  border: 1px solid var(--color-accent);
+  border-radius: var(--tsd-radius-sm);
+  background: var(--color-background-secondary);
+}
+
+/* sidebar-навигация: фирменный active + плавные пилюли */
+.tsd-navigation a {
+  border-radius: 8px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tsd-navigation a:hover { background: var(--color-background-active); }
+.tsd-navigation a.current {
+  background: var(--color-active-menu-item);
+  font-weight: 600;
+}
+.tsd-navigation a.current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 3px;
+  height: 1.2em;
+  border-radius: 2px;
+  background: var(--brand-gradient);
+}
+.tsd-navigation a { position: relative; }
+
+/* группы членов / заголовки разделов */
+.tsd-member-group > h2,
+.tsd-panel-group > h2 {
+  font-size: 1.35rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--color-accent);
+}
+
+/* «accordion» details */
+.tsd-accordion-summary { border-radius: var(--tsd-radius-sm); }
+
+/* ─────────────────────────  Поиск  ───────────────────────── */
+#tsd-search .field input,
+.tsd-widget.search {
+  border-radius: 10px;
+}
+#tsd-search.has-focus { background-color: var(--color-background-secondary); }
+dialog.tsd-search-menu, .tsd-search-output {
+  border-radius: var(--tsd-radius);
+  border: 1px solid var(--color-accent);
+  box-shadow: 0 18px 50px rgba(80, 50, 160, 0.18);
+}
+.tsd-search-output li[aria-selected='true'],
+.results li.current {
+  background: var(--brand-gradient-soft);
+}
+
+/* ─────────────────────────  Таблицы  ───────────────────────── */
+.tsd-typography table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--tsd-radius-sm);
+  overflow: hidden;
+}
+.tsd-typography th {
+  background: var(--color-background-secondary);
+  font-weight: 600;
+  text-align: left;
+}
+.tsd-typography th, .tsd-typography td {
+  border-bottom: 1px solid var(--color-accent);
+  padding: 0.55rem 0.8rem;
+}
+.tsd-typography tr:last-child td { border-bottom: none; }
+
+/* ─────────────────────────  Бейджи-метки (kind)  ───────────────────────── */
+.tsd-tag, code.tsd-tag {
+  border-radius: 999px;
+  border: 1px solid var(--color-accent);
+  font-size: 0.72em;
+  letter-spacing: 0.02em;
+}
+
+/* ─────────────────────────  Скроллбары  ───────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: var(--brand-300) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--brand-400) 55%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--brand-500); background-clip: content-box; }
+
+/* ─────────────────────────  Прочее  ───────────────────────── */
+::selection { background: color-mix(in srgb, var(--brand-400) 35%, transparent); }
+
+footer {
+  border-top: 1px solid var(--color-accent);
+  color: var(--color-text-aside);
+  font-size: 0.86rem;
+}
+footer .tsd-generator a { color: var(--color-text-aside); }

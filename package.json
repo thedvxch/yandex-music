@@ -39,6 +39,8 @@
   "files": [
     "dist",
     "src",
+    "assets/hero.png",
+    "assets/mark.svg",
     "README.md",
     "README.en.md"
   ],

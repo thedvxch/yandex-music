@@ -1,13 +1,21 @@
-# @dvxch/yandex-music
+<p align="center">
+  <img src="assets/hero.png" alt="@dvxch/yandex-music — typed TypeScript client for the Yandex Music API" width="100%">
+</p>
 
-[![npm](https://img.shields.io/npm/v/@dvxch/yandex-music?color=cb3837&logo=npm)](https://www.npmjs.com/package/@dvxch/yandex-music)
-[![CI](https://github.com/thedvxch/yandex-music/actions/workflows/ci.yml/badge.svg)](https://github.com/thedvxch/yandex-music/actions/workflows/ci.yml)
-[![types](https://img.shields.io/npm/types/@dvxch/yandex-music?logo=typescript&logoColor=white)](https://www.npmjs.com/package/@dvxch/yandex-music)
-[![bundle](https://img.shields.io/badge/runtime%20deps-0-44cc11)](./package.json)
-[![node](https://img.shields.io/node/v/@dvxch/yandex-music?logo=node.js&logoColor=white)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/@dvxch/yandex-music?color=blue)](./LICENSE)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@dvxch/yandex-music"><img src="https://img.shields.io/npm/v/@dvxch/yandex-music?color=8b5cf6&logo=npm" alt="npm"></a>
+  <a href="https://github.com/thedvxch/yandex-music/actions/workflows/ci.yml"><img src="https://github.com/thedvxch/yandex-music/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/@dvxch/yandex-music"><img src="https://img.shields.io/npm/types/@dvxch/yandex-music?logo=typescript&logoColor=white&color=8b5cf6" alt="types"></a>
+  <a href="./package.json"><img src="https://img.shields.io/badge/runtime%20deps-0-44cc11" alt="zero deps"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@dvxch/yandex-music?logo=node.js&logoColor=white&color=44cc11" alt="node"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/@dvxch/yandex-music?color=a78bfa" alt="license"></a>
+</p>
 
-[🇷🇺 Документация на русском](./README.md) · [📖 API docs](https://thedvxch.github.io/yandex-music/)
+<p align="center">
+  <a href="https://gh.dvxch.link/yandex-music/"><b>📖 Documentation</b></a> ·
+  <a href="./README.md">🇷🇺 На русском</a> ·
+  <a href="https://www.npmjs.com/package/@dvxch/yandex-music">npm</a>
+</p>
 
 A typed, async **TypeScript client for the Yandex Music API**.
 
