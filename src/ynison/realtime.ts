@@ -99,6 +99,14 @@ export interface RealtimeOptions {
   /** Maximum reconnect backoff in ms. Defaults to `30000`. */
   reconnectMaxMs?: number;
   /**
+   * Maximum delay (ms) to honour from a server "go-away" frame before retrying.
+   * Defaults to `60000`. Ynison sometimes answers "temporary unavailable" with a
+   * go-away of an hour or more; capping it lets a watcher recover within a minute
+   * of the service returning instead of staying dead for the full hour, while a
+   * single retry per cap interval is gentle enough not to hammer the server.
+   */
+  goAwayMaxMs?: number;
+  /**
    * Force a reconnect when the WebSocket shows no activity — no frame, ping or
    * pong — for this many ms, which means a silently broken pipe with no TCP
    * reset. `0` (the default) disables the watchdog. A now-playing watcher
@@ -252,7 +260,14 @@ export class RealtimeClient extends EventEmitter {
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         this.emit('error', err);
-        delayMs = error instanceof YnisonError && error.retryAfterMs ? error.retryAfterMs : this.backoff();
+        // honour a server go-away, but cap it: Ynison's "temporary unavailable"
+        // can carry an hour-long go-away, which would freeze the client until it
+        // elapses. Capping lets us recover within `goAwayMaxMs` of the service
+        // returning.
+        delayMs =
+          error instanceof YnisonError && error.retryAfterMs
+            ? Math.min(error.retryAfterMs, this.opts.goAwayMaxMs ?? 60_000)
+            : this.backoff();
       } finally {
         if (staleTimer !== null) {
           clearInterval(staleTimer);
