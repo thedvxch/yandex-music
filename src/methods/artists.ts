@@ -12,6 +12,11 @@ import {
   ArtistSimilar,
   ArtistTrailer,
   BriefInfo,
+  ArtistInfo,
+  ArtistAbout,
+  ArtistClips,
+  ArtistDonations,
+  ArtistSkeleton,
 } from '../models/artist/artistExtras.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
@@ -209,6 +214,72 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
         return result.filter((id): id is string | number => typeof id === 'string' || typeof id === 'number');
       }
       return [];
+    }
+
+    /**
+     * Fetch detailed information about an artist.
+     *
+     * @param artistId - The artist id.
+     * @returns The artist info, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async artistsInfo(artistId: string | number): Promise<ArtistInfo | null> {
+      const url = `${this.baseUrl}/artists/${artistId}/info`;
+      const result = await this.request.get(url);
+      return ArtistInfo.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the "about" block of an artist.
+     *
+     * @param artistId - The artist id.
+     * @returns The about block, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async artistsAbout(artistId: string | number): Promise<ArtistAbout | null> {
+      const url = `${this.baseUrl}/artists/${artistId}/about-artist`;
+      const result = await this.request.get(url);
+      return ArtistAbout.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the artist-clips block of an artist.
+     *
+     * @param artistId - The artist id.
+     * @returns The clips block, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async artistsClips(artistId: string | number): Promise<ArtistClips | null> {
+      const url = `${this.baseUrl}/artists/${artistId}/blocks/artist-clips`;
+      const result = await this.request.get(url);
+      return ArtistClips.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the artist-donation block of an artist.
+     *
+     * @param artistId - The artist id.
+     * @returns The donation block, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async artistsDonation(artistId: string | number): Promise<ArtistDonations | null> {
+      const url = `${this.baseUrl}/artists/${artistId}/blocks/artist-donation`;
+      const result = await this.request.get(url);
+      return ArtistDonations.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch a skeleton (page layout) of an artist.
+     *
+     * @param artistId - The artist id.
+     * @param skeletonId - The skeleton id.
+     * @returns The skeleton, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async artistsSkeleton(artistId: string | number, skeletonId: string): Promise<ArtistSkeleton | null> {
+      const url = `${this.baseUrl}/artists/${artistId}/skeletons/${skeletonId}`;
+      const result = await this.request.get(url);
+      return ArtistSkeleton.deJson(result, this as unknown as Client);
     }
   }
 

@@ -7,6 +7,7 @@ import { ClientBase } from '../clientBase.js';
 import { deList, isJsonObject } from '../base.js';
 import { Like, TracksList } from '../models/like.js';
 import { Artist } from '../models/artist/artist.js';
+import { ClipsWillLike } from '../models/clip.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -326,6 +327,52 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       userId?: string | number,
     ): Promise<boolean> {
       return dislikeAction(this as unknown as ClientBase, 'artist', artistIds, true, userId);
+    }
+
+    /**
+     * Fetch a page of the user's liked clips.
+     *
+     * @param userId - Target user id. Defaults to the authenticated account.
+     * @param page - Page index (0-based). Defaults to `0`.
+     * @param pageSize - Clips per page. Defaults to `20`.
+     * @returns The liked clips, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async usersLikesClips(userId?: string | number, page = 0, pageSize = 20): Promise<ClipsWillLike | null> {
+      const uid = userId ?? this.accountUid;
+      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/clips`, {
+        page,
+        pageSize,
+      });
+      return ClipsWillLike.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Like a clip.
+     *
+     * @param clipId - The clip id.
+     * @param userId - Target user id. Defaults to the authenticated account.
+     * @returns Whether the operation succeeded.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async usersLikesClipsAdd(clipId: string | number, userId?: string | number): Promise<boolean> {
+      const uid = userId ?? this.accountUid;
+      const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/add`, { 'clip-id': clipId });
+      return result === 'ok';
+    }
+
+    /**
+     * Remove the like from a clip.
+     *
+     * @param clipId - The clip id.
+     * @param userId - Target user id. Defaults to the authenticated account.
+     * @returns Whether the operation succeeded.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async usersLikesClipsRemove(clipId: string | number, userId?: string | number): Promise<boolean> {
+      const uid = userId ?? this.accountUid;
+      const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/remove`, { 'clip-id': clipId });
+      return result === 'ok';
     }
   }
 

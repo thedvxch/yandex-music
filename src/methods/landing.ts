@@ -7,6 +7,9 @@ import { ClientBase } from '../clientBase.js';
 import { deList } from '../base.js';
 import { ChartInfo, Landing, LandingList } from '../models/landing/landing.js';
 import { Genre } from '../models/genre.js';
+import { Feed } from '../models/feed/feed.js';
+import { TagResult } from '../models/tagResult.js';
+import { isJsonObject } from '../base.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -92,6 +95,40 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
     async genres(): Promise<Genre[]> {
       const result = await this.request.get(`${this.baseUrl}/genres`);
       return deList(Genre.deJson, result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the personalised feed (legacy `/feed` endpoint).
+     *
+     * @returns The feed, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async feed(): Promise<Feed | null> {
+      const result = await this.request.get(`${this.baseUrl}/feed`);
+      return Feed.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Check whether the feed onboarding wizard has been completed.
+     *
+     * @returns `true` when the wizard has been passed.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async feedWizardIsPassed(): Promise<boolean> {
+      const result = await this.request.get(`${this.baseUrl}/feed/wizard/is-passed`);
+      return isJsonObject(result) ? Boolean(result['isWizardPassed']) : false;
+    }
+
+    /**
+     * Fetch the playlists grouped under a tag.
+     *
+     * @param tagId - The tag id.
+     * @returns The tagged playlists, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async tags(tagId: string): Promise<TagResult | null> {
+      const result = await this.request.get(`${this.baseUrl}/tags/${tagId}/playlist-ids`);
+      return TagResult.deJson(result, this as unknown as Client);
     }
   }
 

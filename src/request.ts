@@ -40,6 +40,13 @@ export const DEFAULT_TIMEOUT_MS = 5000;
  */
 export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 300_000;
 
+/**
+ * Default idle timeout for streaming downloads: abort when no bytes are written
+ * for this long, catching a stalled connection well before the overall
+ * {@link DEFAULT_DOWNLOAD_TIMEOUT_MS} deadline.
+ */
+export const DEFAULT_DOWNLOAD_IDLE_MS = 60_000;
+
 /** Headers sent with every request unless overridden. */
 export const BASE_HEADERS: Readonly<Record<string, string>> = {
   'X-Yandex-Music-Client': 'YandexMusicAndroid/24023621',
@@ -90,6 +97,13 @@ export interface RequestInit {
   fetch?: FetchLike;
   /** `User-Agent` header value. Defaults to {@link USER_AGENT}. */
   userAgent?: string;
+  /** Number of retries for transient failures on idempotent (`GET`) requests.
+   * Defaults to `2` (3 attempts total). Set `0` to disable. */
+  retries?: number;
+  /** Initial retry backoff in ms. Defaults to `300`. */
+  retryBaseMs?: number;
+  /** Maximum retry backoff in ms. Defaults to `4000`. */
+  retryMaxMs?: number;
 }
 
 interface Envelope {
@@ -101,6 +115,14 @@ interface Envelope {
 /** Internal sentinel: every mirror failed the header race, so fall back to the
  * sequential retry. Never surfaces to callers. */
 class RaceFailed extends Error {}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Exponential backoff with full jitter (`random() * min(max, base·2^attempt)`),
+ * spreading retries to avoid thundering-herd against the API. */
+function backoff(attempt: number, baseMs: number, maxMs: number): number {
+  return Math.random() * Math.min(maxMs, baseMs * 2 ** attempt);
+}
 
 /** Run a whole buffer through a Node transform and collect the output (the
  * in-memory fallback for {@link Request.streamToFile} when no body stream is
@@ -134,6 +156,12 @@ export class Request {
   client?: Client;
   /** `User-Agent` sent with every request. */
   userAgent: string;
+  /** Retries for transient failures on idempotent requests. */
+  retries: number;
+  /** Initial retry backoff in ms. */
+  retryBaseMs: number;
+  /** Maximum retry backoff in ms. */
+  retryMaxMs: number;
   /** The `fetch` implementation used for every request. */
   private readonly fetchImpl: FetchLike;
 
@@ -148,6 +176,9 @@ export class Request {
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? (globalThis.fetch as FetchLike);
     this.userAgent = options.userAgent ?? USER_AGENT;
+    this.retries = options.retries ?? 2;
+    this.retryBaseMs = options.retryBaseMs ?? 300;
+    this.retryMaxMs = options.retryMaxMs ?? 4000;
     if (options.client) {
       this.setClient(options.client);
     }
@@ -312,14 +343,15 @@ export class Request {
   async streamToFile(
     url: string,
     filename: string,
-    options: { timeout?: number; transform?: () => Transform } = {},
+    options: { timeout?: number; transform?: () => Transform; idleTimeoutMs?: number } = {},
   ): Promise<void> {
     const controller = new AbortController();
     const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), ms);
+    const idleMs = options.idleTimeoutMs ?? DEFAULT_DOWNLOAD_IDLE_MS;
     try {
       const response = await this.openValidated(url, controller.signal);
-      await this.pipeBody(response, filename, options.transform?.());
+      await this.pipeBody(response, filename, options.transform?.(), { controller, idleMs });
     } catch (error) {
       throw this.wrapTransportError(error);
     } finally {
@@ -342,12 +374,13 @@ export class Request {
   async raceToFile(
     urls: string[],
     filename: string,
-    options: { timeout?: number; transform?: () => Transform } = {},
+    options: { timeout?: number; transform?: () => Transform; idleTimeoutMs?: number } = {},
   ): Promise<void> {
     if (urls.length <= 1) {
       return this.streamToFile(urls[0] ?? '', filename, options);
     }
     const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
+    const idleMs = options.idleTimeoutMs ?? DEFAULT_DOWNLOAD_IDLE_MS;
     const controllers = urls.map(() => new AbortController());
     const timer = setTimeout(() => controllers.forEach((c) => c.abort()), ms);
     try {
@@ -365,7 +398,10 @@ export class Request {
       }
       // commit to the winner; drop the losing connections.
       controllers.forEach((c, i) => i !== winner && c.abort());
-      await this.pipeBody(response, filename, options.transform?.());
+      await this.pipeBody(response, filename, options.transform?.(), {
+        controller: controllers[winner]!,
+        idleMs,
+      });
     } catch (error) {
       // winner stream broke (or no mirror responded): robust sequential fallback.
       let lastError: unknown = error instanceof RaceFailed ? undefined : error;
@@ -394,15 +430,46 @@ export class Request {
   }
 
   /** Pipe a response body to a file, through `transform` when given; streams when
-   * the body is a stream, otherwise buffers and writes once. */
-  private async pipeBody(response: ResponseLike, filename: string, transform?: Transform): Promise<void> {
+   * the body is a stream, otherwise buffers and writes once.
+   *
+   * When `idle` is provided, a watchdog aborts a stalled stream after `idleMs` of
+   * no write progress — detecting a dead connection in seconds rather than only
+   * at the overall deadline, while a still-flowing download is never interrupted. */
+  private async pipeBody(
+    response: ResponseLike,
+    filename: string,
+    transform?: Transform,
+    idle?: { controller: AbortController; idleMs: number },
+  ): Promise<void> {
     const webBody = response.body;
     if (webBody && typeof (webBody as { getReader?: unknown }).getReader === 'function') {
       const source = Readable.fromWeb(webBody as NodeWebReadableStream<Uint8Array>);
-      const stages = transform ? [source, transform, createWriteStream(filename)] : [source, createWriteStream(filename)];
-      // `pipeline` propagates the abort (via the stream erroring) and closes
-      // every stage, including the file handle, on success or failure.
-      await pipeline(stages as [Readable, ...NodeJS.WritableStream[]]);
+      const sink = createWriteStream(filename);
+      const stages = transform ? [source, transform, sink] : [source, sink];
+      // idle watchdog: abort if the file hasn't grown for `idleMs` (a silently
+      // broken pipe). Progress is measured by bytes actually written to disk.
+      let idleTimer: ReturnType<typeof setInterval> | null = null;
+      if (idle && idle.idleMs > 0) {
+        let lastBytes = 0;
+        let lastProgressAt = Date.now();
+        idleTimer = setInterval(() => {
+          if (sink.bytesWritten > lastBytes) {
+            lastBytes = sink.bytesWritten;
+            lastProgressAt = Date.now();
+          } else if (Date.now() - lastProgressAt > idle.idleMs) {
+            idle.controller.abort();
+          }
+        }, Math.max(1000, Math.min(idle.idleMs, 5000)));
+      }
+      try {
+        // `pipeline` propagates the abort (via the stream erroring) and closes
+        // every stage, including the file handle, on success or failure.
+        await pipeline(stages as [Readable, ...NodeJS.WritableStream[]]);
+      } finally {
+        if (idleTimer !== null) {
+          clearInterval(idleTimer);
+        }
+      }
     } else {
       const raw = new Uint8Array(await response.arrayBuffer());
       await writeFile(filename, transform ? await runTransform(transform, raw) : raw);
@@ -464,7 +531,43 @@ export class Request {
     return search.toString();
   }
 
+  /**
+   * Perform a request, retrying transient transport failures on idempotent
+   * (`GET`) methods with exponential backoff + jitter. Mutating methods are never
+   * retried (one attempt). Typed API errors (4xx/auth) are not retried either —
+   * only {@link NetworkError} and {@link TimedOutError} are.
+   */
   private async requestWrapper(
+    method: string,
+    url: string,
+    body?: { body: string; form?: boolean; json?: boolean },
+    timeout?: number,
+  ): Promise<Uint8Array> {
+    const maxAttempts = method === 'GET' ? this.retries + 1 : 1;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        return await this.attemptRequest(method, url, body, timeout);
+      } catch (error) {
+        lastError = error;
+        // Retry only transient transport/server failures. NetworkError covers
+        // connection resets and 5xx; TimedOutError covers stalls. Its 4xx
+        // subclasses (Bad Request, Not Found) and auth errors are deterministic —
+        // never retried.
+        const retryable =
+          (error instanceof NetworkError || error instanceof TimedOutError) &&
+          !(error instanceof BadRequestError) &&
+          !(error instanceof NotFoundError);
+        if (attempt === maxAttempts - 1 || !retryable) {
+          throw error;
+        }
+        await sleep(backoff(attempt, this.retryBaseMs, this.retryMaxMs));
+      }
+    }
+    throw lastError;
+  }
+
+  private async attemptRequest(
     method: string,
     url: string,
     body?: { body: string; form?: boolean; json?: boolean },

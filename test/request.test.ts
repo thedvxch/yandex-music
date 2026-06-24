@@ -302,6 +302,64 @@ describe('likes return shapes', () => {
   });
 });
 
+describe('transient retries', () => {
+  test('retries a transient failure on GET, then succeeds', async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      if (calls < 3) throw new Error('ECONNRESET');
+      return { status: 200, arrayBuffer: async () => new TextEncoder().encode('{"result":7}').buffer };
+    };
+    const r = new Request({ fetch: fetchImpl, retryBaseMs: 1, retryMaxMs: 2 });
+    expect(await r.get('http://x')).toBe(7);
+    expect(calls).toBe(3); // 1 + 2 retries
+  });
+
+  test('exhausts retries and throws the last error', async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      throw new Error('ECONNRESET');
+    };
+    const r = new Request({ fetch: fetchImpl, retries: 2, retryBaseMs: 1, retryMaxMs: 2 });
+    await expect(r.get('http://x')).rejects.toBeInstanceOf(NetworkError);
+    expect(calls).toBe(3);
+  });
+
+  test('does not retry non-idempotent POST', async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      throw new Error('ECONNRESET');
+    };
+    const r = new Request({ fetch: fetchImpl, retryBaseMs: 1 });
+    await expect(r.post('http://x', { a: 1 })).rejects.toBeInstanceOf(NetworkError);
+    expect(calls).toBe(1);
+  });
+
+  test('does not retry typed 4xx errors', async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      return { status: 404, arrayBuffer: async () => new TextEncoder().encode('{}').buffer };
+    };
+    const r = new Request({ fetch: fetchImpl, retryBaseMs: 1 });
+    await expect(r.get('http://x')).rejects.toBeInstanceOf(NotFoundError);
+    expect(calls).toBe(1);
+  });
+
+  test('retries disabled with retries: 0', async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      throw new Error('ECONNRESET');
+    };
+    const r = new Request({ fetch: fetchImpl, retries: 0 });
+    await expect(r.get('http://x')).rejects.toBeInstanceOf(NetworkError);
+    expect(calls).toBe(1);
+  });
+});
+
 describe('streaming downloads', () => {
   let dir: string;
   const file = () => join(dir, `out-${Math.random().toString(36).slice(2)}.bin`);
@@ -345,6 +403,27 @@ describe('streaming downloads', () => {
     const r = new Request({ fetch: async () => streamResponse(new TextEncoder().encode('{}'), 404) });
     await expect(r.streamToFile('http://x', '/tmp/nope-xyz')).rejects.toBeInstanceOf(NotFoundError);
   });
+
+  test('streamToFile aborts a stalled stream via the idle watchdog', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ym-stream-'));
+    // body emits a chunk then never closes; aborting the fetch signal errors it.
+    const fetchImpl: FetchLike = async (_url, init) => ({
+      status: 200,
+      arrayBuffer: async () => new Uint8Array().buffer,
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+          init.signal.addEventListener('abort', () => controller.error(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        },
+      }),
+    });
+    const r = new Request({ fetch: fetchImpl });
+    const path = file();
+    await expect(
+      r.streamToFile(path, path, { idleTimeoutMs: 1000, timeout: 60_000 }),
+    ).rejects.toBeInstanceOf(TimedOutError);
+    await rm(dir, { recursive: true, force: true });
+  }, 10_000);
 
   test('raceToFile commits to the first responding mirror', async () => {
     dir = await mkdtemp(join(tmpdir(), 'ym-stream-'));

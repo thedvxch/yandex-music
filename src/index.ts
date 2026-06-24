@@ -73,7 +73,19 @@ export {
   ArtistSimilar,
   ArtistTrailer,
   BriefInfo,
+  ArtistInfo,
+  ArtistAbout,
+  ArtistClips,
+  ArtistClipItem,
+  ArtistClipData,
+  ArtistDonations,
+  ArtistDonationItem,
+  ArtistDonationData,
+  ArtistDonationGoal,
+  ArtistSkeleton,
 } from './models/artist/artistExtras.js';
+export { Feed, Day, Event, TrackWithAds, AlbumEvent, ArtistEvent } from './models/feed/feed.js';
+export { TagResult } from './models/tagResult.js';
 export { Stats } from './models/artist/stats.js';
 export { Vinyl } from './models/artist/vinyl.js';
 export type { ArtistAlbumsSortBy, SortOrder } from './methods/artists.js';

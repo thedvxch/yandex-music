@@ -54,6 +54,13 @@ export interface ClientOptions {
    * metrics or a test assertion.
    */
   onUnknownField?: UnknownFieldReporter;
+  /** Retries for transient failures on idempotent (`GET`) requests. Defaults to
+   * `2` (3 attempts). Set `0` to disable. Ignored when `request` is supplied. */
+  retries?: number;
+  /** Initial retry backoff in ms. Defaults to `300`. Ignored when `request` is supplied. */
+  retryBaseMs?: number;
+  /** Maximum retry backoff in ms. Defaults to `4000`. Ignored when `request` is supplied. */
+  retryMaxMs?: number;
 }
 
 /** Object types addressable through the batch "list" endpoints. */
@@ -102,6 +109,9 @@ export abstract class ClientBase {
         fetch: options.fetch,
         userAgent: options.userAgent,
         headers: options.headers,
+        retries: options.retries,
+        retryBaseMs: options.retryBaseMs,
+        retryMaxMs: options.retryMaxMs,
       });
     }
     this.request.setLanguage(this.language);

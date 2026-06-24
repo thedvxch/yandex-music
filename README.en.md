@@ -36,6 +36,17 @@ token; the few endpoints the server no longer fulfils for a regular account
 (e.g. legacy queue creation, rotor feedback) surface a typed error rather than
 failing silently.
 
+## Features
+
+- **Zero runtime dependencies.** Built on the platform `fetch`; ESM-only, Node ≥ 20.
+- **Fully typed.** Every endpoint and model has hand-written types and a static `deJson` — no `any` on the public surface.
+- **Complete API coverage.** ~145 methods across every domain, kept at parity with the upstream API.
+- **Robust transport.** Automatic retries with exponential backoff + jitter on transient failures (idempotent requests only); typed errors; per-call timeouts.
+- **Streaming downloads.** `download()` streams straight to disk (constant memory), transparently AES-CTR-decrypting lossless (`encraw`/FLAC) on the fly, with optional **CDN-mirror racing** and an idle-stall watchdog.
+- **Realtime "now playing"** over Ynison — a reconnecting `EventEmitter` plus a synchronous `nowPlaying` snapshot.
+- **Drift detection.** Opt-in `onUnknownField` hook reports any API field the models don't yet map — so upstream changes are caught, not swallowed.
+- **Pluggable `fetch`.** Inject a custom transport (proxy, TLS impersonation, tuned connection pool).
+
 ## Install
 
 ```bash
@@ -92,6 +103,9 @@ const client = new Client({
   device: 'os=Linux; model=my-app; ...',           // device descriptor for queues
   language: 'en',                                   // response language
   fetch: myFetch,                                   // custom transport (e.g. node-wreq)
+  retries: 2,                                       // retries for transient GET failures (0 = off)
+  onUnknownField: ({ model, fields }) =>            // drift hook: API fields not yet modelled
+    console.warn(`${model}: unmapped ${fields.join(', ')}`),
 });
 ```
 
@@ -106,12 +120,12 @@ set separately via `client.realtime({ deviceInfo })`.
 | account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `usersSettings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
 | tracks      | `tracks`, `tracksDownloadInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `tracksCredits`, `tracksDisclaimer`, `playAudio`, `afterTrack` |
 | albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer`, `albumsDisclaimer` |
-| artists     | `artists`, `artistsBriefInfo`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
+| artists     | `artists`, `artistsBriefInfo`, `artistsInfo`, `artistsAbout`, `artistsClips`, `artistsDonation`, `artistsSkeleton`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
-| likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists; `usersDislikesTracks`/`Artists` + add/remove |
+| likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists, clips; `usersLikesClips`; `usersDislikesTracks`/`Artists` + add/remove |
 | playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow), `refreshAccessToken` (renew via refresh token) |
-| landing     | `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
+| landing     | `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`radioStarted`/`trackStarted`/`trackFinished`/`skip` shortcuts), `rotorStationSettings2` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |
 | history     | `musicHistory`, `musicHistoryItems` |
@@ -181,7 +195,7 @@ Runnable examples live in [`examples/`](./examples):
 
 ```bash
 npm run typecheck   # type-check src + tests
-npm test            # run the test suite (node:test)
+npm test            # run the test suite (vitest)
 npm run build       # emit dist/ (ESM + .d.ts)
 npm run docs        # generate API docs (TypeDoc) into docs/api
 ```
