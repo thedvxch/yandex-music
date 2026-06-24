@@ -26,7 +26,7 @@ export {
 export type { Sign, FileInfoSign } from './signRequest.js';
 
 // Base model machinery
-export { YandexMusicModel, deList, isJsonObject, assign, reportUnknown } from './base.js';
+export { YandexMusicModel, deList, deRecord, isJsonObject, assign, reportUnknown } from './base.js';
 export type { JSONObject, JSONValue, DeJson } from './types.js';
 export type { UnknownFieldsReport, UnknownFieldReporter } from './base.js';
 
@@ -45,7 +45,7 @@ export {
 } from './exceptions.js';
 
 // Models — common value objects
-export { Cover, CoverDerivedColors, Icon, Link, ContentRestrictions } from './models/common.js';
+export { Cover, CoverDerivedColors, Icon, Link, ContentRestrictions, ExtraAction } from './models/common.js';
 export { Pager } from './models/pager.js';
 
 // Models — track
@@ -167,13 +167,14 @@ export type { PlayAudioOptions } from './methods/tracks.js';
 export { Landing, Block, BlockEntity, LandingList, ChartInfo, Chart, ChartItem } from './models/landing/landing.js';
 export type { BlockEntityData } from './models/landing/landing.js';
 export { Promotion, PlayContext, MixLink, TrackShortOld } from './models/landing/entities.js';
-export { Genre } from './models/genre.js';
+export { Genre, GenreTitle } from './models/genre.js';
 
 // Models — rotor (radio)
 export {
   Id,
   Station,
   StationResult,
+  StationSettings,
   Dashboard,
   Sequence,
   TrackParameters,

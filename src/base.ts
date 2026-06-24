@@ -44,6 +44,34 @@ export function deList<T>(deJson: DeJson<T>, data: JSONValue | undefined, client
   return result;
 }
 
+/**
+ * Deserialize a map of raw JSON objects (keyed by string, e.g. by language) into
+ * a record of typed models. Entries the deserializer rejects are skipped.
+ *
+ * @typeParam T - The model type produced.
+ * @param deJson - The per-model deserializer.
+ * @param data - A raw JSON object, or any value (returns `undefined` otherwise).
+ * @param client - The owning {@link Client}, propagated to each model.
+ * @returns The record of deserialized models, or `undefined` when empty/not an object.
+ */
+export function deRecord<T>(
+  deJson: DeJson<T>,
+  data: JSONValue | undefined,
+  client?: Client,
+): Record<string, T> | undefined {
+  if (!isJsonObject(data)) {
+    return undefined;
+  }
+  const result: Record<string, T> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const model = deJson(value, client);
+    if (model !== null) {
+      result[key] = model;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 /** A report of API keys a model did not map, passed to {@link UnknownFieldReporter}. */
 export interface UnknownFieldsReport {
   /** The model name (the `label` passed to {@link reportUnknown}). */

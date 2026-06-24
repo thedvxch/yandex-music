@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { Cover, Link } from '../common.js';
+import { Cover, ExtraAction, Link } from '../common.js';
 import { Track } from '../track/track.js';
 import { Album } from '../album/album.js';
 import { Video } from '../video.js';
@@ -163,8 +163,8 @@ export class BriefInfo extends YandexMusicModel {
   bandlinkScannerLink?: string;
   /** The artist's clips (short videos). */
   clips?: Clip[];
-  /** Extra page actions (raw JSON, pending a typed model). */
-  extraActions?: JSONValue;
+  /** Extra page actions (for example a donation button). */
+  extraActions?: ExtraAction[];
   /** The artist's custom wave (radio) descriptor. */
   customWave?: CustomWave;
   /** Whether the artist has a trailer. */
@@ -178,7 +178,8 @@ export class BriefInfo extends YandexMusicModel {
       return null;
     }
     const model = new BriefInfo(client);
-    assign(model, raw, ['lastReleaseIds', 'concerts', 'hasPromotions', 'bandlinkScannerLink', 'extraActions', 'hasTrailer']);
+    assign(model, raw, ['lastReleaseIds', 'concerts', 'hasPromotions', 'bandlinkScannerLink', 'hasTrailer']);
+    model.extraActions = deList(ExtraAction.deJson, raw['extraActions'], client);
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.albums = deList(Album.deJson, raw['albums'], client);
     model.playlists = deList(Playlist.deJson, raw['playlists'], client);

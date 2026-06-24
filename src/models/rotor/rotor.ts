@@ -217,19 +217,45 @@ export class Station extends YandexMusicModel {
   }
 }
 
+/** The selected personalization settings of a station (the `settings` /
+ * `settings2` payloads share these fields). */
+export class StationSettings extends YandexMusicModel {
+  /** Selected language filter (for example `any`). */
+  language?: string;
+  /** Selected mood (legacy numeric scale, `settings`). */
+  mood?: number;
+  /** Selected energy (legacy numeric scale, `settings`). */
+  energy?: number;
+  /** Selected mood/energy preset (`settings2`, for example `all`). */
+  moodEnergy?: string;
+  /** Selected diversity (for example `default`). */
+  diversity?: string;
+
+  /** @see {@link StationSettings} */
+  static deJson(raw: JSONValue | undefined, client?: Client): StationSettings | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new StationSettings(client);
+    assign(model, raw, ['language', 'mood', 'energy', 'moodEnergy', 'diversity']);
+    reportUnknown(client, 'StationSettings', raw, model);
+    return model;
+  }
+}
+
 /** A station together with its settings and ad parameters. */
 export class StationResult extends YandexMusicModel {
   /** The station. */
   station?: Station;
-  /** Station settings (free-form raw JSON). */
-  settings?: JSONValue;
-  /** Newer station settings payload (free-form raw JSON). */
-  settings2?: JSONValue;
+  /** Station personalization settings. */
+  settings?: StationSettings;
+  /** Newer station personalization settings payload. */
+  settings2?: StationSettings;
   /** Ad parameters. */
   adParams?: AdParams;
   /** Explanation text. */
   explanation?: string;
-  /** Prerolls (raw JSON). */
+  /** Prerolls (free-form raw JSON, ad payload). */
   prerolls?: JSONValue;
   /** "Rup" title. */
   rupTitle?: string;
@@ -244,8 +270,10 @@ export class StationResult extends YandexMusicModel {
       return null;
     }
     const model = new StationResult(client);
-    assign(model, raw, ['settings', 'settings2', 'explanation', 'prerolls', 'rupTitle', 'rupDescription', 'customName']);
+    assign(model, raw, ['explanation', 'prerolls', 'rupTitle', 'rupDescription', 'customName']);
     model.station = Station.deJson(raw['station'], client) ?? undefined;
+    model.settings = StationSettings.deJson(raw['settings'], client) ?? undefined;
+    model.settings2 = StationSettings.deJson(raw['settings2'], client) ?? undefined;
     model.adParams = AdParams.deJson(raw['adParams'], client) ?? undefined;
     reportUnknown(client, 'StationResult', raw, model);
     return model;

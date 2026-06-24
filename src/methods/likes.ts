@@ -358,7 +358,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
     async usersLikesClipsAdd(clipId: string | number, userId?: string | number): Promise<boolean> {
       const uid = userId ?? this.accountUid;
       const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/add`, { 'clip-id': clipId });
-      return result === 'ok';
+      return result === 'ok' || isJsonObject(result);
     }
 
     /**
@@ -371,8 +371,8 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesClipsRemove(clipId: string | number, userId?: string | number): Promise<boolean> {
       const uid = userId ?? this.accountUid;
-      const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/remove`, { 'clip-id': clipId });
-      return result === 'ok';
+      const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/${clipId}/remove`);
+      return result === 'ok' || isJsonObject(result);
     }
   }
 

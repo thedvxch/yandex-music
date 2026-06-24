@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { ContentRestrictions, Cover, CoverDerivedColors, Link } from '../common.js';
+import { ContentRestrictions, Cover, CoverDerivedColors, ExtraAction, Link } from '../common.js';
 import { Track } from '../track/track.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -146,8 +146,8 @@ export class Artist extends YandexMusicModel {
   trailer?: JSONValue;
   /** Donation/support info (free-form raw JSON, pending a typed model). */
   donationInfo?: JSONValue;
-  /** Extra page actions (free-form raw JSON, pending a typed model). */
-  extraActions?: JSONValue;
+  /** Extra page actions (for example a donation button). */
+  extraActions?: ExtraAction[];
   /** Decomposed name parts (names + separators; free-form raw JSON). */
   decomposed?: JSONValue;
 
@@ -190,7 +190,6 @@ export class Artist extends YandexMusicModel {
       'timestamp',
       'trailer',
       'donationInfo',
-      'extraActions',
       'decomposed',
     ]);
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
@@ -202,6 +201,7 @@ export class Artist extends YandexMusicModel {
     model.contentRestrictions = ContentRestrictions.deJson(raw['contentRestrictions'], client) ?? undefined;
     model.cutoutCover = Cover.deJson(raw['cutoutCover'], client) ?? undefined;
     model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
+    model.extraActions = deList(ExtraAction.deJson, raw['extraActions'], client);
     reportUnknown(client, 'Artist', raw, model);
     return model;
   }

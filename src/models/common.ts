@@ -198,3 +198,26 @@ export class ContentRestrictions extends YandexMusicModel {
     return model;
   }
 }
+
+/** A page action on an artist/entity page (for example a donation button). */
+export class ExtraAction extends YandexMusicModel {
+  /** Action type (for example `donation`). */
+  type?: string;
+  /** Button label. */
+  title?: string;
+  /** Accent color (hex). */
+  color?: string;
+  /** Target URL. */
+  url?: string;
+
+  /** @see {@link ExtraAction} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ExtraAction | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ExtraAction(client);
+    assign(model, raw, ['type', 'title', 'color', 'url']);
+    reportUnknown(client, 'ExtraAction', raw, model);
+    return model;
+  }
+}

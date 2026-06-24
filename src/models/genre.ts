@@ -3,10 +3,29 @@
  *
  * @packageDocumentation
  */
-import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../base.js';
+import { YandexMusicModel, assign, deList, deRecord, isJsonObject, reportUnknown } from '../base.js';
 import { Icon } from './common.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
+
+/** A genre's localized title (one entry of {@link Genre.titles}). */
+export class GenreTitle extends YandexMusicModel {
+  /** Short title. */
+  title?: string;
+  /** Full title. */
+  fullTitle?: string;
+
+  /** @see {@link GenreTitle} */
+  static deJson(raw: JSONValue | undefined, client?: Client): GenreTitle | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new GenreTitle(client);
+    assign(model, raw, ['title', 'fullTitle']);
+    reportUnknown(client, 'GenreTitle', raw, model);
+    return model;
+  }
+}
 
 /** A music genre, possibly containing sub-genres. */
 export class Genre extends YandexMusicModel {
@@ -18,8 +37,8 @@ export class Genre extends YandexMusicModel {
   composerTop?: boolean;
   /** Default title. */
   title?: string;
-  /** Localized titles keyed by language (raw JSON, pending a typed model). */
-  titles?: JSONValue;
+  /** Localized titles keyed by language code (`ru`, `en`, …). */
+  titles?: Record<string, GenreTitle>;
   /** Genre images (raw JSON, pending a typed model). */
   images?: JSONValue;
   /** Whether shown in the genre menu. */
@@ -50,7 +69,6 @@ export class Genre extends YandexMusicModel {
       'weight',
       'composerTop',
       'title',
-      'titles',
       'images',
       'showInMenu',
       'showInRegions',
@@ -59,6 +77,7 @@ export class Genre extends YandexMusicModel {
       'urlPart',
       'color',
     ]);
+    model.titles = deRecord(GenreTitle.deJson, raw['titles'], client);
     model.radioIcon = Icon.deJson(raw['radioIcon'], client) ?? undefined;
     model.subGenres = deList(Genre.deJson, raw['subGenres'], client);
     reportUnknown(client, 'Genre', raw, model);
