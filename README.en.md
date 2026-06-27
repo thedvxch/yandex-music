@@ -19,7 +19,7 @@
 
 A typed, async **TypeScript client for the Yandex Music API**.
 
-`@dvxch/yandex-music` is an independent, from-scratch TypeScript implementation of
+`@dvxch/yandex-music` is an independent TypeScript implementation of
 the Yandex Music HTTP API. It targets
 modern Node.js (≥ 20), ships ESM with full type declarations, and has **zero
 runtime dependencies** (it uses the built-in `fetch`).
