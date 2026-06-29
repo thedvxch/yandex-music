@@ -155,6 +155,10 @@ export class RealtimeClient extends EventEmitter {
   private lastTrack: Track | null = null;
   /** `Date.now()` of the last state frame, for {@link lastStateAgeMs}. */
   private lastStateAt = 0;
+  /** Monotone counter to detect out-of-order resolveTrack completions. */
+  private resolveSeq = 0;
+  /** Resolves the backoff sleep immediately when stop() is called. */
+  private stopResolve: (() => void) | null = null;
 
   constructor(opts: RealtimeOptions) {
     super();
@@ -281,7 +285,11 @@ export class RealtimeClient extends EventEmitter {
       }
       const wait = delayMs ?? this.backoff();
       this.emit('reconnect', wait);
-      await sleep(wait);
+      await new Promise<void>((resolve) => {
+        this.stopResolve = resolve;
+        setTimeout(() => { this.stopResolve = null; resolve(); }, wait);
+      });
+      this.stopResolve = null;
     }
     this.running = false;
     this.emit('close');
@@ -292,6 +300,8 @@ export class RealtimeClient extends EventEmitter {
     this.running = false;
     this.current?.disconnect();
     this.current = null;
+    this.stopResolve?.();
+    this.stopResolve = null;
   }
 
   private backoff(): number {
@@ -343,6 +353,7 @@ export class RealtimeClient extends EventEmitter {
       idx >= 0 && idx < state.playableList.length ? (state.playableList[idx]?.playableId ?? null) : null;
     if (playableId && playableId !== this.lastPlayableId) {
       this.lastPlayableId = playableId;
+      const seq = ++this.resolveSeq;
       let track: Track | null = null;
       if (this.opts.resolveTrack) {
         try {
@@ -351,6 +362,8 @@ export class RealtimeClient extends EventEmitter {
           this.emit('error', error instanceof Error ? error : new Error(String(error)));
         }
       }
+      // A newer frame updated lastPlayableId while we were awaiting — discard stale result.
+      if (seq !== this.resolveSeq) return;
       this.lastTrack = track;
       this.emit('trackChange', { playableId, track });
     }

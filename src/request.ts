@@ -9,7 +9,7 @@
  *
  * @packageDocumentation
  */
-import { writeFile } from 'node:fs/promises';
+import { writeFile, unlink } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -135,7 +135,12 @@ async function runTransform(transform: Transform, input: Uint8Array): Promise<Ui
     transform.on('error', reject);
   });
   transform.end(input);
-  await done;
+  try {
+    await done;
+  } catch (err) {
+    transform.destroy();
+    throw err;
+  }
   return new Uint8Array(Buffer.concat(chunks));
 }
 
@@ -225,8 +230,8 @@ export class Request {
    * @returns The unwrapped `result` payload, or `undefined` for an empty body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async get(url: string, params?: Params, timeout?: number): Promise<JSONValue | undefined> {
-    const bytes = await this.requestWrapper('GET', this.withQuery(url, params), undefined, timeout);
+  async get(url: string, params?: Params, timeout?: number, extraHeaders?: Record<string, string>): Promise<JSONValue | undefined> {
+    const bytes = await this.requestWrapper('GET', this.withQuery(url, params), undefined, timeout, extraHeaders);
     return this.unwrap(bytes);
   }
 
@@ -239,7 +244,7 @@ export class Request {
    * @returns The unwrapped `result` payload, or `undefined` for an empty body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async post(url: string, data?: Params | string, timeout?: number): Promise<JSONValue | undefined> {
+  async post(url: string, data?: Params | string, timeout?: number, extraHeaders?: Record<string, string>): Promise<JSONValue | undefined> {
     // A pre-serialized string body is JSON (e.g. queue payloads); object bodies
     // are form-encoded. Tagging a JSON string as form-urlencoded makes some
     // endpoints (notably `/queues`) drop the connection, so pick the matching
@@ -248,7 +253,7 @@ export class Request {
       typeof data === 'string'
         ? { body: data, json: true }
         : { body: this.encodeForm(data), form: true };
-    const bytes = await this.requestWrapper('POST', url, init, timeout);
+    const bytes = await this.requestWrapper('POST', url, init, timeout, extraHeaders);
     return this.unwrap(bytes);
   }
 
@@ -349,13 +354,18 @@ export class Request {
     const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), ms);
     const idleMs = options.idleTimeoutMs ?? DEFAULT_DOWNLOAD_IDLE_MS;
+    let failed = false;
     try {
       const response = await this.openValidated(url, controller.signal);
       await this.pipeBody(response, filename, options.transform?.(), { controller, idleMs });
     } catch (error) {
+      failed = true;
       throw this.wrapTransportError(error);
     } finally {
       clearTimeout(timer);
+      if (failed) {
+        await unlink(filename).catch(() => undefined);
+      }
     }
   }
 
@@ -381,6 +391,7 @@ export class Request {
     }
     const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     const idleMs = options.idleTimeoutMs ?? DEFAULT_DOWNLOAD_IDLE_MS;
+    const deadline = Date.now() + ms;
     const controllers = urls.map(() => new AbortController());
     const timer = setTimeout(() => controllers.forEach((c) => c.abort()), ms);
     try {
@@ -406,8 +417,10 @@ export class Request {
       // winner stream broke (or no mirror responded): robust sequential fallback.
       let lastError: unknown = error instanceof RaceFailed ? undefined : error;
       for (const url of urls) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
         try {
-          await this.streamToFile(url, filename, options);
+          await this.streamToFile(url, filename, { ...options, timeout: remaining });
           return;
         } catch (e) {
           lastError = e;
@@ -542,12 +555,13 @@ export class Request {
     url: string,
     body?: { body: string; form?: boolean; json?: boolean },
     timeout?: number,
+    extraHeaders?: Record<string, string>,
   ): Promise<Uint8Array> {
     const maxAttempts = method === 'GET' ? this.retries + 1 : 1;
     let lastError: unknown;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
-        return await this.attemptRequest(method, url, body, timeout);
+        return await this.attemptRequest(method, url, body, timeout, extraHeaders);
       } catch (error) {
         lastError = error;
         // Retry only transient transport/server failures. NetworkError covers
@@ -572,12 +586,13 @@ export class Request {
     url: string,
     body?: { body: string; form?: boolean; json?: boolean },
     timeout?: number,
+    extraHeaders?: Record<string, string>,
   ): Promise<Uint8Array> {
     const controller = new AbortController();
     const ms = timeout ?? this.timeout;
     const timer = setTimeout(() => controller.abort(), ms);
 
-    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
+    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent, ...extraHeaders };
     if (body?.form) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
     } else if (body?.json) {
@@ -674,9 +689,14 @@ export class Request {
     if (found) {
       return [found.name, found.message].filter(Boolean).join(': ');
     }
-    // Legacy `{ error, errorDescription }` (strings).
+    // Legacy `{ error, errorDescription }` (strings). OAuth endpoints use snake_case `error_description`.
     const error = typeof data['error'] === 'string' ? data['error'] : '';
-    const description = typeof data['errorDescription'] === 'string' ? data['errorDescription'] : '';
+    const description =
+      typeof data['errorDescription'] === 'string'
+        ? data['errorDescription']
+        : typeof data['error_description'] === 'string'
+          ? data['error_description']
+          : '';
     return [error, description].filter(Boolean).join(' ').trim();
   }
 

@@ -8,7 +8,7 @@
  *
  * @packageDocumentation
  */
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 
 /**
  * Device identity override for the full-state request.
@@ -30,9 +30,9 @@ export interface DeviceInfoOverride {
   title?: string;
 }
 
-/** Generate a random device id (`hex(floor(1e16 * random()))`). */
+/** Generate a random device id (8 cryptographically-random bytes as hex). */
 export function generateDeviceId(): string {
-  return Math.floor(10 ** 16 * Math.random()).toString(16);
+  return randomBytes(8).toString('hex');
 }
 
 /** Generate a request id (a UUID v4). */

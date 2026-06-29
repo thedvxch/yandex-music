@@ -33,8 +33,8 @@ export function QueueMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async queuesList(device?: string): Promise<QueueItem[]> {
-      this.request.headers[DEVICE_HEADER] = device ?? this.device;
-      const result = await this.request.get(`${this.baseUrl}/queues`);
+      const extraHeaders = { [DEVICE_HEADER]: device ?? this.device };
+      const result = await this.request.get(`${this.baseUrl}/queues`, undefined, undefined, extraHeaders);
       const queues = isJsonObject(result) ? result['queues'] : result;
       return deList(QueueItem.deJson, queues, this as unknown as Client);
     }
@@ -61,9 +61,9 @@ export function QueueMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async queueUpdatePosition(queueId: string, currentIndex: number, device?: string): Promise<boolean> {
-      this.request.headers[DEVICE_HEADER] = device ?? this.device;
+      const extraHeaders = { [DEVICE_HEADER]: device ?? this.device };
       const url = `${this.baseUrl}/queues/${queueId}/update-position?currentIndex=${currentIndex}`;
-      const result = await this.request.post(url, { isInteractive: String(false) });
+      const result = await this.request.post(url, { isInteractive: String(false) }, undefined, extraHeaders);
       return isJsonObject(result) && result['status'] === 'ok';
     }
 
@@ -76,9 +76,9 @@ export function QueueMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async queueCreate(queue: JSONObject | string, device?: string): Promise<string | null> {
-      this.request.headers[DEVICE_HEADER] = device ?? this.device;
+      const extraHeaders = { [DEVICE_HEADER]: device ?? this.device };
       const body = typeof queue === 'string' ? queue : JSON.stringify(queue);
-      const result = await this.request.post(`${this.baseUrl}/queues`, body);
+      const result = await this.request.post(`${this.baseUrl}/queues`, body, undefined, extraHeaders);
       return isJsonObject(result) && typeof result['id'] === 'string' ? result['id'] : null;
     }
   }

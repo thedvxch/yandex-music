@@ -218,9 +218,13 @@ export class YnisonClient {
     return this.lastActivity;
   }
 
-  /** Register a listener invoked for each state frame. */
-  onState(listener: StateListener): void {
+  /** Register a listener invoked for each state frame. Returns an unsubscribe function. */
+  onState(listener: StateListener): () => void {
     this.listeners.push(listener);
+    return () => {
+      const idx = this.listeners.indexOf(listener);
+      if (idx !== -1) this.listeners.splice(idx, 1);
+    };
   }
 
   private headers(): Record<string, string> {
@@ -383,15 +387,18 @@ export class YnisonClient {
   waitFirstState(timeoutMs: number): Promise<YnisonState> {
     return new Promise<YnisonState>((resolve, reject) => {
       let done = false;
+      let unsubscribe!: () => void;
       const timer = setTimeout(() => {
         if (done) return;
         done = true;
+        unsubscribe();
         reject(new YnisonError(`first state frame did not arrive within ${timeoutMs}ms`));
       }, timeoutMs);
-      this.onState((state) => {
+      unsubscribe = this.onState((state) => {
         if (done) return;
         done = true;
         clearTimeout(timer);
+        unsubscribe();
         resolve(state);
       });
     });

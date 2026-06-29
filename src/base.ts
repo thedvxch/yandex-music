@@ -128,7 +128,11 @@ export function reportUnknown(
     return;
   }
   if (client.onUnknownField) {
-    client.onUnknownField({ model: label, fields: unknown, raw });
+    try {
+      client.onUnknownField({ model: label, fields: unknown, raw });
+    } catch {
+      // hook errors must not abort model deserialization.
+    }
     return;
   }
   // eslint-disable-next-line no-console
