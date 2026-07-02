@@ -500,11 +500,13 @@ export class Request {
     return new NetworkError(error instanceof Error ? error.message : String(error), { cause: error });
   }
 
-  private withQuery(url: string, params?: Params): string {
-    if (!params) {
-      return url;
-    }
+  /** Build a `URLSearchParams` from `Params`, repeating array values per key and
+   * skipping `undefined`/`null`. Shared by query-string and form-body encoding. */
+  private toSearchParams(params?: Params): URLSearchParams {
     const search = new URLSearchParams();
+    if (!params) {
+      return search;
+    }
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined || value === null) {
         continue;
@@ -519,29 +521,16 @@ export class Request {
         search.append(key, String(value));
       }
     }
-    const qs = search.toString();
+    return search;
+  }
+
+  private withQuery(url: string, params?: Params): string {
+    const qs = this.toSearchParams(params).toString();
     return qs ? `${url}?${qs}` : url;
   }
 
   private encodeForm(data?: Params): string {
-    const search = new URLSearchParams();
-    if (data) {
-      for (const [key, value] of Object.entries(data)) {
-        if (value === undefined || value === null) {
-          continue;
-        }
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            if (item !== undefined && item !== null) {
-              search.append(key, String(item));
-            }
-          }
-        } else {
-          search.append(key, String(value));
-        }
-      }
-    }
-    return search.toString();
+    return this.toSearchParams(data).toString();
   }
 
   /**

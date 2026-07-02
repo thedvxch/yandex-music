@@ -19,10 +19,10 @@
 
 A typed, async **TypeScript client for the Yandex Music API**.
 
-`@dvxch/yandex-music` is an independent TypeScript implementation of
-the Yandex Music HTTP API. It targets
-modern Node.js (≥ 20), ships ESM with full type declarations, and has **zero
-runtime dependencies** (it uses the built-in `fetch`).
+`@dvxch/yandex-music` is an independent TypeScript implementation of the Yandex
+Music HTTP API. It targets modern Node.js (≥ 20), ships ESM with full type
+declarations, and has **zero runtime dependencies** (it uses the built-in
+`fetch`).
 
 > Status: complete. The full HTTP API — `account` / `tracks` / `albums` /
 > `artists` / `search` / `likes` / `playlists` / `device auth` / `landing` /
@@ -35,6 +35,21 @@ Every endpoint has been exercised against the live Yandex Music API with a real
 token; the few endpoints the server no longer fulfils for a regular account
 (e.g. legacy queue creation, rotor feedback) surface a typed error rather than
 failing silently.
+
+### Table of contents
+
+- [Features](#features)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Design](#design)
+- [Configuration](#configuration)
+- [Error handling](#error-handling)
+- [Implemented endpoints](#implemented-endpoints)
+- [Realtime](#realtime)
+- [Examples](#examples)
+- [Documentation](#documentation)
+- [Acknowledgements](#acknowledgements)
+- [License](#license)
 
 ## Features
 
@@ -51,6 +66,13 @@ failing silently.
 
 ```bash
 npm install @dvxch/yandex-music
+```
+
+Requires Node.js ≥ 20. Realtime ("now playing") additionally needs the optional
+`ws` package:
+
+```bash
+npm install ws
 ```
 
 ## Quick start
@@ -74,6 +96,11 @@ const lyrics = await client.tracksLyrics(2, 'LRC');
 console.log(await lyrics?.fetchLyrics());
 ```
 
+`new Client({ token })` is cheap. `await client.init()` loads account info once,
+so methods that default to the current user (`usersLikes*`, `usersPlaylists*`,
+`pins`, `presaves`) work without an explicit `userId`. Read-only catalog calls
+(`tracks`, `albums`, `search`, …) work without `init()` too.
+
 ## Design
 
 - **Flat client surface.** Methods live directly on the client
@@ -90,6 +117,8 @@ console.log(await lyrics?.fetchLyrics());
 - **Typed errors.** Every failure derives from `YandexMusicError`; network
   failures additionally derive from `NetworkError` (`BadRequestError`,
   `NotFoundError`, `TimedOutError`, `UnauthorizedError`).
+- **Never `JSON.stringify` a model** — it carries a back-reference to the client
+  (a cyclic structure). Read fields directly instead.
 
 ## Configuration
 
@@ -113,17 +142,69 @@ const client = new Client({
 your own `request` instead when you supply one. The realtime device identity is
 set separately via `client.realtime({ deviceInfo })`.
 
+### All `ClientOptions`
+
+| Option | Purpose |
+| ----- | ---------- |
+| `token` | OAuth token |
+| `baseUrl` | override the API origin |
+| `language` | response language: `en`/`uz`/`uk`/`us`/`ru`/`kk`/`hy` (default `ru`) |
+| `userAgent` | override the User-Agent |
+| `headers` | extra headers, merged onto the defaults |
+| `device` | device descriptor for queue requests |
+| `fetch` | custom `fetch` (proxy, mocks, retries) |
+| `retries` | retries for transient GET failures (default 2, 0 = off) |
+| `reportUnknownFields` | surface API fields the models don't yet map |
+| `onUnknownField` | hook to use instead of `console.warn` for the same drift |
+| `request` | a fully pre-configured transport (overrides `userAgent`/`headers`/`fetch`) |
+
+## Error handling
+
+Every library error derives from `YandexMusicError` — a single `catch` is
+enough to intercept all of them. Network and transport failures additionally
+derive from `NetworkError`:
+
+```ts
+import {
+  YandexMusicError,
+  UnauthorizedError,
+  NotFoundError,
+  TimedOutError,
+} from '@dvxch/yandex-music';
+
+try {
+  await client.tracksLyrics(trackId);
+} catch (error) {
+  if (error instanceof UnauthorizedError) {
+    // token missing or expired — re-authenticate
+  } else if (error instanceof NotFoundError) {
+    // this track has no lyrics
+  } else if (error instanceof TimedOutError) {
+    // the request stalled — safe to retry
+  } else if (error instanceof YandexMusicError) {
+    // any other library error
+  } else {
+    throw error; // not ours
+  }
+}
+```
+
+`GET` requests automatically retry on transient failures (exponential backoff +
+jitter, `retries` attempts on top, 2 by default). Mutating requests
+(`POST`/`PUT`/`DELETE`) are never retried automatically — this guards against
+duplicate side effects (e.g. a double like).
+
 ## Implemented endpoints
 
 | Domain      | Methods |
 | ----------- | ------- |
-| account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `usersSettings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
-| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `tracksCredits`, `tracksDisclaimer`, `playAudio`, `afterTrack` |
-| albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer`, `albumsDisclaimer` |
+| account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
+| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `playAudio`, `afterTrack` |
+| albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer` |
 | artists     | `artists`, `artistsBriefInfo`, `artistsInfo`, `artistsAbout`, `artistsClips`, `artistsDonation`, `artistsSkeleton`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
-| likes       | `usersLikesTracks` + add/remove for tracks, artists, albums, playlists, clips; `usersLikesClips`; `usersDislikesTracks`/`Artists` + add/remove |
-| playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
+| likes       | `usersLikesTracks`/`Albums`/`Artists`/`Playlists`/`Clips` + add/remove for each; `usersDislikesTracks`/`Artists` + add/remove |
+| playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `usersSettings`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow), `refreshAccessToken` (renew via refresh token) |
 | landing     | `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`radioStarted`/`trackStarted`/`trackFinished`/`skip` shortcuts), `rotorStationSettings2` |
@@ -139,7 +220,22 @@ set separately via `client.realtime({ deviceInfo })`.
 | concerts    | `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
 | realtime    | `client.realtime()` → `RealtimeClient` (Ynison; needs `ws`) |
 
-## Realtime ("now playing")
+### Downloads and quality
+
+For lossy variants, use `tracksDownloadInfo` / `track.getDownloadInfo()` and
+pick by bitrate:
+
+```ts
+const variants = await track!.getDownloadInfo();          // DownloadInfo[]
+const best = [...variants].sort((a, b) => (b.bitrateInKbps ?? 0) - (a.bitrateInKbps ?? 0))[0];
+await best!.download('track.mp3');
+```
+
+Lossless (FLAC) goes through a separate path via `tracksLosslessInfo` /
+`track.getLosslessDownloadInfo()` (`LosslessDownloadInfo`, on-the-fly AES-CTR
+decryption), documented in the package's types.
+
+## Realtime
 
 Yandex Music has no HTTP webhooks; the only server-push channel is **Ynison**
 (the WebSocket protocol that syncs playback across devices). `client.realtime()`
@@ -189,16 +285,18 @@ Runnable examples live in [`examples/`](./examples):
 - `08-charts-and-new.ts` — chart, new releases, genres;
 - `09-lyrics.ts` — time-synced (LRC) lyrics;
 - `10-download-quality.ts` — quality/codec selection incl. lossless (FLAC);
-- `11-artist.ts` — artist brief info, tracks, discography, similar.
+- `11-artist.ts` — artist brief info, tracks, discography, similar;
+- `12-custom-fetch.ts` — injecting a custom `fetch` (e.g. `node-wreq` for TLS impersonation).
 
-## Development
+See [`examples/README.md`](./examples/README.md) for details and run commands.
 
-```bash
-npm run typecheck   # type-check src + tests
-npm test            # run the test suite (vitest)
-npm run build       # emit dist/ (ESM + .d.ts)
-npm run docs        # generate API docs (TypeDoc) into docs/api
-```
+## Documentation
+
+The narrative guides under [`docs/guides`](docs/guides) are written in Russian
+(they back the [documentation site](https://gh.dvxch.link/yandex-music/)); the
+auto-generated **[API reference](https://gh.dvxch.link/yandex-music/)** (TypeDoc,
+built from the English source comments) covers every class, method and model
+and is the best starting point if you don't read Russian.
 
 ## Acknowledgements
 
