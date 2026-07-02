@@ -46,10 +46,13 @@ jobs:
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       # prepublishOnly (clean + typecheck + test + build) runs here automatically.
-      - run: npm publish --tag "${{ inputs.npm_tag }}"
+      # npm_tag is untrusted workflow_dispatch input — pass via env, never interpolate into the script.
+      - run: npm publish --tag "$NPM_TAG"
+        env:
+          NPM_TAG: ${{ inputs.npm_tag }}
 
       # Publish succeeded → tag the commit and cut a Release with generated notes.
-      - uses: ncipollo/release-action@v1
+      - uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
           tag: v${{ steps.pkg.outputs.version }}
           name: v${{ steps.pkg.outputs.version }}
