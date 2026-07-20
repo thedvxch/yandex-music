@@ -55,9 +55,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsBriefInfo(artistId: string | number): Promise<BriefInfo | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/brief-info`;
-      const result = await this.request.get(url);
-      return BriefInfo.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/brief-info`, BriefInfo.deJson);
     }
 
     /**
@@ -167,9 +165,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsSimilar(artistId: string | number): Promise<ArtistSimilar | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/similar`;
-      const result = await this.request.get(url);
-      return ArtistSimilar.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/similar`, ArtistSimilar.deJson);
     }
 
     /**
@@ -180,9 +176,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsLinks(artistId: string | number): Promise<ArtistLinks | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/artist-links`;
-      const result = await this.request.get(url);
-      return ArtistLinks.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/artist-links`, ArtistLinks.deJson);
     }
 
     /**
@@ -193,9 +187,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsTrailer(artistId: string | number): Promise<ArtistTrailer | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/trailer`;
-      const result = await this.request.get(url);
-      return ArtistTrailer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/trailer`, ArtistTrailer.deJson);
     }
 
     /**
@@ -224,9 +216,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsInfo(artistId: string | number): Promise<ArtistInfo | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/info`;
-      const result = await this.request.get(url);
-      return ArtistInfo.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/info`, ArtistInfo.deJson);
     }
 
     /**
@@ -237,9 +227,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsAbout(artistId: string | number): Promise<ArtistAbout | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/about-artist`;
-      const result = await this.request.get(url);
-      return ArtistAbout.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/about-artist`, ArtistAbout.deJson);
     }
 
     /**
@@ -250,9 +238,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsClips(artistId: string | number): Promise<ArtistClips | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/blocks/artist-clips`;
-      const result = await this.request.get(url);
-      return ArtistClips.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/blocks/artist-clips`, ArtistClips.deJson);
     }
 
     /**
@@ -263,9 +249,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsDonation(artistId: string | number): Promise<ArtistDonations | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/blocks/artist-donation`;
-      const result = await this.request.get(url);
-      return ArtistDonations.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/blocks/artist-donation`, ArtistDonations.deJson);
     }
 
     /**
@@ -277,9 +261,7 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsSkeleton(artistId: string | number, skeletonId: string): Promise<ArtistSkeleton | null> {
-      const url = `${this.baseUrl}/artists/${artistId}/skeletons/${skeletonId}`;
-      const result = await this.request.get(url);
-      return ArtistSkeleton.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/skeletons/${skeletonId}`, ArtistSkeleton.deJson);
     }
   }
 

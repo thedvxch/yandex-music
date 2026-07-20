@@ -358,6 +358,9 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
     async usersLikesClipsAdd(clipId: string | number, userId?: string | number): Promise<boolean> {
       const uid = userId ?? this.accountUid;
       const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/add`, { 'clip-id': clipId });
+      // Unlike every sibling like/dislike action, this endpoint's success response
+      // shape isn't confirmed to be the bare string 'ok' — kept object-tolerant to
+      // avoid reporting a false failure until that's verified against a live API.
       return result === 'ok' || isJsonObject(result);
     }
 
@@ -372,6 +375,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
     async usersLikesClipsRemove(clipId: string | number, userId?: string | number): Promise<boolean> {
       const uid = userId ?? this.accountUid;
       const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/${clipId}/remove`);
+      // See usersLikesClipsAdd — response shape unconfirmed, kept object-tolerant.
       return result === 'ok' || isJsonObject(result);
     }
   }

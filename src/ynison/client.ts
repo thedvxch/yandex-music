@@ -104,7 +104,7 @@ export function parseStateFrame(message: string): YnisonState {
     paused: Boolean(field(status, 'paused')),
     durationMs: toNum(field(status, 'duration_ms', 'durationMs'), 0),
     progressMs: toNum(field(status, 'progress_ms', 'progressMs'), 0),
-    playbackSpeed: toNum(field(status, 'playback_speed', 'playbackSpeed'), 1) || 1,
+    playbackSpeed: toNum(field(status, 'playback_speed', 'playbackSpeed'), 1),
     timestampMs: toNum(field(version, 'timestamp_ms', 'timestampMs'), 0),
   };
 }

@@ -39,6 +39,8 @@ export {
   NetworkError,
   BadRequestError,
   NotFoundError,
+  ConflictError,
+  PayloadTooLargeError,
   TimedOutError,
   DeviceAuthError,
   YnisonError,

@@ -63,9 +63,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
         const result = await this.request.post(url, { kinds: kind });
         return deList(Playlist.deJson, result, this as unknown as Client);
       }
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}`;
-      const result = await this.request.get(url);
-      return Playlist.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}`, Playlist.deJson);
     }
 
     /**
@@ -81,9 +79,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<PlaylistRecommendations | null> {
       const uid = userId ?? this.accountUid;
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/recommendations`;
-      const result = await this.request.get(url);
-      return PlaylistRecommendations.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}/recommendations`, PlaylistRecommendations.deJson);
     }
 
     /**
@@ -286,9 +282,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async playlist(playlistUuid: string): Promise<Playlist | null> {
-      const url = `${this.baseUrl}/playlist/${playlistUuid}`;
-      const result = await this.request.get(url);
-      return Playlist.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/playlist/${playlistUuid}`, Playlist.deJson);
     }
 
     /**
@@ -299,9 +293,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async playlistSimilarEntities(playlistUuid: string): Promise<PlaylistSimilarEntities | null> {
-      const url = `${this.baseUrl}/playlist/${playlistUuid}/similar-entities`;
-      const result = await this.request.get(url);
-      return PlaylistSimilarEntities.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/playlist/${playlistUuid}/similar-entities`, PlaylistSimilarEntities.deJson);
     }
 
     /**
@@ -345,9 +337,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async playlistsPersonal(playlistId: string): Promise<GeneratedPlaylist | null> {
-      const url = `${this.baseUrl}/playlists/personal/${playlistId}`;
-      const result = await this.request.get(url);
-      return GeneratedPlaylist.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/playlists/personal/${playlistId}`, GeneratedPlaylist.deJson);
     }
 
     /**
@@ -363,9 +353,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<PlaylistTrailer | null> {
       const uid = userId ?? this.accountUid;
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/trailer`;
-      const result = await this.request.get(url);
-      return PlaylistTrailer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}/trailer`, PlaylistTrailer.deJson);
     }
 
     /**

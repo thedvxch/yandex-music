@@ -153,6 +153,10 @@ export class RealtimeClient extends EventEmitter {
   private lastState: YnisonState | null = null;
   /** Last resolved track (when a resolver is configured). */
   private lastTrack: Track | null = null;
+  /** Playable id `lastTrack` was resolved for — set together with `lastTrack`,
+   * one tick after `lastPlayableId`, so `nowPlaying` never pairs a new id with a
+   * stale track while a resolve is in flight (see {@link handleState}). */
+  private lastResolvedPlayableId: string | null = null;
   /** `Date.now()` of the last state frame, for {@link lastStateAgeMs}. */
   private lastStateAt = 0;
   /** Monotone counter to detect out-of-order resolveTrack completions. */
@@ -200,7 +204,7 @@ export class RealtimeClient extends EventEmitter {
       idx >= 0 && idx < s.playableList.length ? (s.playableList[idx]?.playableId ?? null) : null;
     return {
       playableId,
-      track: playableId === this.lastPlayableId ? this.lastTrack : null,
+      track: playableId === this.lastResolvedPlayableId ? this.lastTrack : null,
       paused: s.paused,
       durationMs: s.durationMs,
       progressMs: liveProgressMs(s),
@@ -377,6 +381,7 @@ export class RealtimeClient extends EventEmitter {
       // A newer frame updated lastPlayableId while we were awaiting — discard stale result.
       if (seq !== this.resolveSeq) return;
       this.lastTrack = track;
+      this.lastResolvedPlayableId = playableId;
       this.emit('trackChange', { playableId, track });
     }
   }

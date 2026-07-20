@@ -242,6 +242,9 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @param type - The station type. Defaults to `'rotor'`.
      * @returns Whether the operation succeeded.
      * @throws {YandexMusicError} On any transport or API error.
+     * @remarks The method name keeps the historical "2" suffix used across
+     * yandex-music client libraries even though the backend endpoint it calls is
+     * `/settings3` — renaming it would be a breaking change for no functional gain.
      */
     async rotorStationSettings2(
       station: string,

@@ -157,9 +157,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksSimilar(trackId: string | number): Promise<SimilarTracks | null> {
-      const url = `${this.baseUrl}/tracks/${trackId}/similar`;
-      const result = await this.request.get(url);
-      return SimilarTracks.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/tracks/${trackId}/similar`, SimilarTracks.deJson);
     }
 
     /**
@@ -170,9 +168,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksFullInfo(trackId: string | number): Promise<TrackFullInfo | null> {
-      const url = `${this.baseUrl}/tracks/${trackId}/full-info`;
-      const result = await this.request.get(url);
-      return TrackFullInfo.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/tracks/${trackId}/full-info`, TrackFullInfo.deJson);
     }
 
     /**
@@ -183,9 +179,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksTrailer(trackId: string | number): Promise<TrackTrailer | null> {
-      const url = `${this.baseUrl}/tracks/${trackId}/trailer`;
-      const result = await this.request.get(url);
-      return TrackTrailer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/tracks/${trackId}/trailer`, TrackTrailer.deJson);
     }
 
     /**
@@ -196,9 +190,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async trackSupplement(trackId: string | number): Promise<Supplement | null> {
-      const url = `${this.baseUrl}/tracks/${trackId}/supplement`;
-      const result = await this.request.get(url);
-      return Supplement.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/tracks/${trackId}/supplement`, Supplement.deJson);
     }
 
     /**

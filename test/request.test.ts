@@ -10,9 +10,11 @@ import {
   USER_AGENT,
   Request,
   BadRequestError,
+  ConflictError,
   DeviceAuthError,
   NetworkError,
   NotFoundError,
+  PayloadTooLargeError,
   TimedOutError,
   UnauthorizedError,
   YandexMusicError,
@@ -121,6 +123,16 @@ describe('status → error class mapping', () => {
     await expect(r.get('http://x')).rejects.toThrow(
       expect.objectContaining({ name: 'NetworkError', message: 'Bad Gateway' }),
     );
+  });
+
+  test('409 maps to ConflictError', async () => {
+    const r = reqWith('{}', 409);
+    await expect(r.get('http://x')).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  test('413 maps to PayloadTooLargeError', async () => {
+    const r = reqWith('{}', 413);
+    await expect(r.get('http://x')).rejects.toBeInstanceOf(PayloadTooLargeError);
   });
 
   test('unmapped status falls back to NetworkError with the code appended', async () => {
@@ -346,6 +358,19 @@ describe('transient retries', () => {
     const r = new Request({ fetch: fetchImpl, retryBaseMs: 1 });
     await expect(r.get('http://x')).rejects.toBeInstanceOf(NotFoundError);
     expect(calls).toBe(1);
+  });
+
+  test('does not retry 409/413 — deterministic 4xx, retrying identically fails', async () => {
+    for (const status of [409, 413]) {
+      let calls = 0;
+      const fetchImpl: FetchLike = async () => {
+        calls += 1;
+        return { status, arrayBuffer: async () => new TextEncoder().encode('{}').buffer };
+      };
+      const r = new Request({ fetch: fetchImpl, retryBaseMs: 1 });
+      await expect(r.get('http://x')).rejects.toBeInstanceOf(status === 409 ? ConflictError : PayloadTooLargeError);
+      expect(calls).toBe(1);
+    }
   });
 
   test('retries disabled with retries: 0', async () => {

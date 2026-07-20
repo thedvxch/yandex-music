@@ -38,6 +38,12 @@ export class BadRequestError extends NetworkError {}
 /** Raised when the requested resource does not exist (HTTP 404). */
 export class NotFoundError extends NetworkError {}
 
+/** Raised when the request conflicts with the resource's current state (HTTP 409). Deterministic — retrying an identical request fails the same way. */
+export class ConflictError extends NetworkError {}
+
+/** Raised when the request payload exceeds the server's size limit (HTTP 413). Deterministic — retrying an identical request fails the same way. */
+export class PayloadTooLargeError extends NetworkError {}
+
 /** Raised when a request exceeds its timeout. */
 export class TimedOutError extends NetworkError {
   constructor(message = 'Timed out') {

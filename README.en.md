@@ -207,7 +207,7 @@ duplicate side effects (e.g. a double like).
 | playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `usersSettings`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow), `refreshAccessToken` (renew via refresh token) |
 | landing     | `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
-| radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`radioStarted`/`trackStarted`/`trackFinished`/`skip` shortcuts), `rotorStationSettings2` |
+| radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`rotorStationFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip` shortcuts), `rotorStationSettings2` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |
 | history     | `musicHistory`, `musicHistoryItems` |
 | clips       | `clips`, `clipsWillLike` |
@@ -232,7 +232,7 @@ await best!.download('track.mp3');
 ```
 
 Lossless (FLAC) goes through a separate path via `tracksLosslessInfo` /
-`track.getLosslessDownloadInfo()` (`LosslessDownloadInfo`, on-the-fly AES-CTR
+`track.getLosslessInfo(quality)` (`LosslessDownloadInfo`, on-the-fly AES-CTR
 decryption), documented in the package's types.
 
 ## Realtime

@@ -50,9 +50,7 @@ export function AccountMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async accountStatus(): Promise<Status | null> {
-      const url = `${this.baseUrl}/account/status`;
-      const result = await this.request.get(url);
-      return Status.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/account/status`, Status.deJson);
     }
 
     /**

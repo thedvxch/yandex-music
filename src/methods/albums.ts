@@ -7,7 +7,6 @@ import { ClientBase } from '../clientBase.js';
 import { Album } from '../models/album/album.js';
 import { AlbumSimilarEntities, AlbumTrailer } from '../models/album/albumExtras.js';
 import type { AbstractConstructor } from './mixin.js';
-import type { Client } from '../client.js';
 
 /**
  * Adds album endpoints to the client.
@@ -37,9 +36,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsWithTracks(albumId: string | number): Promise<Album | null> {
-      const url = `${this.baseUrl}/albums/${albumId}/with-tracks`;
-      const result = await this.request.get(url);
-      return Album.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/albums/${albumId}/with-tracks`, Album.deJson);
     }
 
     /**
@@ -50,9 +47,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsSimilarEntities(albumId: string | number): Promise<AlbumSimilarEntities | null> {
-      const url = `${this.baseUrl}/albums/${albumId}/similar-entities`;
-      const result = await this.request.get(url);
-      return AlbumSimilarEntities.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/albums/${albumId}/similar-entities`, AlbumSimilarEntities.deJson);
     }
 
     /**
@@ -63,9 +58,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsTrailer(albumId: string | number): Promise<AlbumTrailer | null> {
-      const url = `${this.baseUrl}/albums/${albumId}/trailer`;
-      const result = await this.request.get(url);
-      return AlbumTrailer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/albums/${albumId}/trailer`, AlbumTrailer.deJson);
     }
   }
 

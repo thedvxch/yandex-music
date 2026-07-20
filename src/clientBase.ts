@@ -143,4 +143,20 @@ export abstract class ClientBase {
     const result = await this.request.post(url, body);
     return deList(deJson, result as JSONValue, this as unknown as Client);
   }
+
+  /**
+   * Fetch and deserialize a single object from a parameter-less `GET` endpoint —
+   * the common shape behind most single-entity method mixins.
+   *
+   * @internal Used by method mixins; not part of the public API.
+   * @typeParam T - The model type produced by `deJson`.
+   * @param url - The full request URL.
+   * @param deJson - Deserializer for the produced model.
+   * @returns The deserialized object, or `null`.
+   * @throws {YandexMusicError} On any transport or API error.
+   */
+  async getModel<T>(url: string, deJson: DeJson<T>): Promise<T | null> {
+    const result = await this.request.get(url);
+    return deJson(result, this as unknown as Client);
+  }
 }

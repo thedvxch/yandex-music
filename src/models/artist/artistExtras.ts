@@ -421,7 +421,8 @@ export class ArtistSkeleton extends YandexMusicModel {
       return null;
     }
     const model = new ArtistSkeleton(client);
-    assign(model, raw, ['id', 'title', 'blocks']);
+    assign(model, raw, ['id', 'title']);
+    model.blocks = Array.isArray(raw['blocks']) ? (raw['blocks'] as JSONValue[]) : undefined;
     reportUnknown(client, 'ArtistSkeleton', raw, model);
     return model;
   }

@@ -17,8 +17,10 @@ import type { Transform } from 'node:stream';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import {
   BadRequestError,
+  ConflictError,
   NetworkError,
   NotFoundError,
+  PayloadTooLargeError,
   TimedOutError,
   UnauthorizedError,
   YandexMusicError,
@@ -558,12 +560,14 @@ export class Request {
         lastError = error;
         // Retry only transient transport/server failures. NetworkError covers
         // connection resets and 5xx; TimedOutError covers stalls. Its 4xx
-        // subclasses (Bad Request, Not Found) and auth errors are deterministic —
-        // never retried.
+        // subclasses (Bad Request, Not Found, Conflict, Payload Too Large) and
+        // auth errors are deterministic — never retried.
         const retryable =
           (error instanceof NetworkError || error instanceof TimedOutError) &&
           !(error instanceof BadRequestError) &&
-          !(error instanceof NotFoundError);
+          !(error instanceof NotFoundError) &&
+          !(error instanceof ConflictError) &&
+          !(error instanceof PayloadTooLargeError);
         if (attempt === maxAttempts - 1 || !retryable) {
           throw error;
         }
@@ -709,8 +713,11 @@ export class Request {
     if (status === 404) {
       throw new NotFoundError(message);
     }
-    if (status === 409 || status === 413) {
-      throw new NetworkError(message);
+    if (status === 409) {
+      throw new ConflictError(message);
+    }
+    if (status === 413) {
+      throw new PayloadTooLargeError(message);
     }
     if (status === 502) {
       throw new NetworkError('Bad Gateway');
