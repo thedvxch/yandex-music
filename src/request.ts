@@ -415,6 +415,9 @@ export class Request {
       });
     } catch (error) {
       // winner stream broke (or no mirror responded): robust sequential fallback.
+      // Clean up any partial bytes the winner wrote — otherwise a deadline hit
+      // before the fallback loop runs (or even starts) leaves a truncated file.
+      await unlink(filename).catch(() => undefined);
       let lastError: unknown = error instanceof RaceFailed ? undefined : error;
       for (const url of urls) {
         const remaining = deadline - Date.now();

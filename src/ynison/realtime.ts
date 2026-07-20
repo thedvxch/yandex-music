@@ -263,7 +263,7 @@ export class RealtimeClient extends EventEmitter {
         await client.connect();
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        this.emit('error', err);
+        this.safeEmitError(err);
         // honour a server go-away, but cap it: Ynison's "temporary unavailable"
         // can carry an hour-long go-away, which would freeze the client until it
         // elapses. Capping lets us recover within `goAwayMaxMs` of the service
@@ -293,6 +293,18 @@ export class RealtimeClient extends EventEmitter {
     }
     this.running = false;
     this.emit('close');
+  }
+
+  /**
+   * Emit `'error'` only when someone is listening. Node's `EventEmitter` throws
+   * the error itself (crashing the process) when `'error'` has no listener, which
+   * would defeat the whole point of an auto-reconnecting client on a transient
+   * failure.
+   */
+  private safeEmitError(err: Error): void {
+    if (this.listenerCount('error') > 0) {
+      this.emit('error', err);
+    }
   }
 
   /** Stop the realtime loop and close the connection. */
@@ -359,7 +371,7 @@ export class RealtimeClient extends EventEmitter {
         try {
           track = await this.opts.resolveTrack(playableId);
         } catch (error) {
-          this.emit('error', error instanceof Error ? error : new Error(String(error)));
+          this.safeEmitError(error instanceof Error ? error : new Error(String(error)));
         }
       }
       // A newer frame updated lastPlayableId while we were awaiting — discard stale result.

@@ -335,7 +335,12 @@ export class YnisonClient {
         }
         for (const l of this.listeners) {
           try {
-            void l(state);
+            // Promise.resolve() passes a rejecting async listener's promise
+            // through unchanged, so .catch() below traps it too — not just a
+            // synchronous throw.
+            void Promise.resolve(l(state)).catch(() => {
+              /* listener errors are isolated */
+            });
           } catch {
             /* listener errors are isolated */
           }
