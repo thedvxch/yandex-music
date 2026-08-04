@@ -6,6 +6,7 @@
 import { ClientBase } from '../clientBase.js';
 import {
   ArtistConcerts,
+  ArtistsWithConcerts,
   ConcertFeed,
   ConcertInfo,
   ConcertLocations,
@@ -94,6 +95,25 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
     async concertsTabConfig(): Promise<ConcertTabConfig | null> {
       const result = await this.request.get(`${this.baseUrl}/concerts/tab-config`);
       return ConcertTabConfig.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the artists-with-concerts landing block for a set of artists.
+     *
+     * @param artistIds - The artist ids.
+     * @param locations - Location ids to filter by.
+     * @returns The entities, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async concertsLandingArtists(
+      artistIds: Array<string | number>,
+      locations?: Array<string | number>,
+    ): Promise<ArtistsWithConcerts | null> {
+      const url = locations?.length
+        ? `${this.baseUrl}/concerts/landing/artists?locations=${locations.join(',')}`
+        : `${this.baseUrl}/concerts/landing/artists`;
+      const result = await this.request.postJson(url, { artistIds: artistIds.map(String) });
+      return ArtistsWithConcerts.deJson(result, this as unknown as Client);
     }
   }
 

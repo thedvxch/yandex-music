@@ -345,6 +345,23 @@ export class ConcertTabConfig extends YandexMusicModel {
 }
 
 /** The skeleton (lazy-render scaffold) of a concert page. */
+/** Artists-with-concerts entities (`/concerts/landing/artists`). */
+export class ArtistsWithConcerts extends YandexMusicModel {
+  /** The entities (raw JSON, pending a typed model). */
+  items?: JSONValue[];
+
+  /** @see {@link ArtistsWithConcerts} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ArtistsWithConcerts | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ArtistsWithConcerts(client);
+    model.items = Array.isArray(raw['items']) ? (raw['items'] as JSONValue[]) : undefined;
+    reportUnknown(client, 'ArtistsWithConcerts', raw, model);
+    return model;
+  }
+}
+
 export class ConcertSkeleton extends YandexMusicModel {
   /** Skeleton id. */
   id?: string;

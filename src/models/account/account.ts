@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { Artist } from '../artist/artist.js';
 import { Permissions, Plus, Subscription } from './subscription.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -88,6 +89,107 @@ export class Account extends YandexMusicModel {
     ]);
     model.passportPhones = deList(PassportPhone.deJson, raw['passportPhones'], client);
     reportUnknown(client, 'Account', raw, model);
+    return model;
+  }
+}
+
+/** Subscription overview returned by `account/about`. */
+export class About extends YandexMusicModel {
+  /** Whether the account has Yandex Plus. */
+  hasPlus?: boolean;
+  /** Whether the account has a Music subscription. */
+  hasMusicSubscription?: boolean;
+  /** Whether this is a child account. */
+  isChild?: boolean;
+  /** Available purchase options (raw JSON, pending a typed model). */
+  options?: JSONValue;
+  /** Whether the music service is available for the account. */
+  serviceAvailable?: boolean;
+
+  /** @see {@link About} */
+  static deJson(raw: JSONValue | undefined, client?: Client): About | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new About(client);
+    assign(model, raw, ['hasPlus', 'hasMusicSubscription', 'isChild', 'options', 'serviceAvailable']);
+    reportUnknown(client, 'About', raw, model);
+    return model;
+  }
+}
+
+/** An artist's standing within {@link TopArtistsMonth} (`personal/top/artists/month`). */
+export class TopPosition extends YandexMusicModel {
+  /** Rank (1-based). */
+  position?: number;
+  /** Movement description (for example `same`). */
+  progress?: string;
+
+  /** @see {@link TopPosition} */
+  static deJson(raw: JSONValue | undefined, client?: Client): TopPosition | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new TopPosition(client);
+    assign(model, raw, ['position', 'progress']);
+    reportUnknown(client, 'TopPosition', raw, model);
+    return model;
+  }
+}
+
+/** One artist's monthly listening stats within {@link TopArtistsMonth}. */
+export class TopArtistEntry extends YandexMusicModel {
+  /** The artist. */
+  artist?: Artist;
+  /** Total seconds listened this month. */
+  listenTimeSeconds?: number;
+  /** The artist's rank. */
+  top?: TopPosition;
+
+  /** @see {@link TopArtistEntry} */
+  static deJson(raw: JSONValue | undefined, client?: Client): TopArtistEntry | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new TopArtistEntry(client);
+    assign(model, raw, ['listenTimeSeconds']);
+    model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
+    model.top = TopPosition.deJson(raw['top'], client) ?? undefined;
+    reportUnknown(client, 'TopArtistEntry', raw, model);
+    return model;
+  }
+}
+
+/** The user's most-listened artists this month (`personal/top/artists/month`). */
+export class TopArtistsMonth extends YandexMusicModel {
+  /** The ranked artists. */
+  artists?: TopArtistEntry[];
+
+  /** @see {@link TopArtistsMonth} */
+  static deJson(raw: JSONValue | undefined, client?: Client): TopArtistsMonth | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new TopArtistsMonth(client);
+    model.artists = deList(TopArtistEntry.deJson, raw['artists'], client);
+    reportUnknown(client, 'TopArtistsMonth', raw, model);
+    return model;
+  }
+}
+
+/** The result of a library sync (`collection/sync`). */
+export class CollectionSync extends YandexMusicModel {
+  /** Synced values (raw JSON, pending a typed model). */
+  values?: JSONValue;
+
+  /** @see {@link CollectionSync} */
+  static deJson(raw: JSONValue | undefined, client?: Client): CollectionSync | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new CollectionSync(client);
+    assign(model, raw, ['values']);
+    reportUnknown(client, 'CollectionSync', raw, model);
     return model;
   }
 }

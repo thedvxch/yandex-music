@@ -348,6 +348,224 @@ export class Sequence extends YandexMusicModel {
   }
 }
 
+/** The default ("My Wave") station returned by `rotor/wave/settings`. */
+export class WaveDefaultStation extends YandexMusicModel {
+  /** Station id, in `type:tag` string form (for example `user:12345`). */
+  stationId?: string;
+  /** Display title. */
+  title?: string;
+  /** "Rup" title. */
+  rupTitle?: string;
+  /** "Rup" description. */
+  rupDescription?: string;
+
+  /** @see {@link WaveDefaultStation} */
+  static deJson(raw: JSONValue | undefined, client?: Client): WaveDefaultStation | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new WaveDefaultStation(client);
+    assign(model, raw, ['stationId', 'title', 'rupTitle', 'rupDescription']);
+    reportUnknown(client, 'WaveDefaultStation', raw, model);
+    return model;
+  }
+}
+
+/** The personalization restrictions exposed for the "My Wave" station. */
+export class WaveSettingRestrictions extends YandexMusicModel {
+  /** Track diversity options. */
+  diversity?: Enum;
+  /** Mood/energy options. */
+  moodEnergy?: Enum;
+  /** Language options. */
+  language?: Enum;
+
+  /** @see {@link WaveSettingRestrictions} */
+  static deJson(raw: JSONValue | undefined, client?: Client): WaveSettingRestrictions | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new WaveSettingRestrictions(client);
+    model.diversity = Enum.deJson(raw['diversity'], client) ?? undefined;
+    model.moodEnergy = Enum.deJson(raw['moodEnergy'], client) ?? undefined;
+    model.language = Enum.deJson(raw['language'], client) ?? undefined;
+    reportUnknown(client, 'WaveSettingRestrictions', raw, model);
+    return model;
+  }
+}
+
+/** Settings and personalization options for the "My Wave" station (`rotor/wave/settings`). */
+export class WaveSettings extends YandexMusicModel {
+  /** The default station to start when the user opens "My Wave". */
+  defaultStation?: WaveDefaultStation;
+  /** Landing blocks shown above the settings (raw JSON, pending a typed model). */
+  blocks?: JSONValue;
+  /** The available personalization restrictions. */
+  settingRestrictions?: WaveSettingRestrictions;
+
+  /** @see {@link WaveSettings} */
+  static deJson(raw: JSONValue | undefined, client?: Client): WaveSettings | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new WaveSettings(client);
+    assign(model, raw, ['blocks']);
+    model.defaultStation = WaveDefaultStation.deJson(raw['defaultStation'], client) ?? undefined;
+    model.settingRestrictions = WaveSettingRestrictions.deJson(raw['settingRestrictions'], client) ?? undefined;
+    reportUnknown(client, 'WaveSettings', raw, model);
+    return model;
+  }
+}
+
+/** A "Wave" station descriptor (`rotor/wave/last`, and nested in {@link RotorSession}). */
+export class WaveInfo extends YandexMusicModel {
+  /** Display name. */
+  name?: string;
+  /** Station id, in `type:tag` string form (for example `user:onyourwave`). */
+  stationId?: string;
+  /** Seed ids the wave was started from. */
+  seeds?: string[];
+  /** Origin tag used in `from` parameters. */
+  idForFrom?: string;
+  /** Description. */
+  description?: string;
+  /** Promo payload (raw JSON, pending a typed model). */
+  promo?: JSONValue;
+  /** Wave type (for example `DEFAULT`). */
+  type?: string;
+
+  /** @see {@link WaveInfo} */
+  static deJson(raw: JSONValue | undefined, client?: Client): WaveInfo | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new WaveInfo(client);
+    assign(model, raw, ['name', 'stationId', 'seeds', 'idForFrom', 'description', 'promo', 'type']);
+    reportUnknown(client, 'WaveInfo', raw, model);
+    return model;
+  }
+}
+
+/** A rotor listening session (`rotor/session/new`). */
+export class RotorSession extends YandexMusicModel {
+  /** Session id. */
+  id?: string;
+  /** Seeds accepted so far. */
+  acceptedSeeds?: string[];
+  /** Seeds the session was originally started with. */
+  originalSeeds?: string[];
+  /** Whether explicit content is allowed. */
+  allowExplicit?: boolean;
+  /** Whether this is a child-safe session. */
+  child?: boolean;
+  /** Creation timestamp (ISO 8601). */
+  createdAt?: string;
+  /** Last access timestamp (ISO 8601). */
+  lastAccess?: string;
+  /** Seed description (for example `user:onyourwave`). */
+  descriptionSeed?: string;
+  /** Whether the session is incognito. */
+  incognito?: boolean;
+  /** Session type (for example `track`). */
+  sessionType?: string;
+  /** Whether the session has been terminated. */
+  terminated?: boolean;
+  /** The wave the session is playing. */
+  wave?: WaveInfo;
+
+  /** @see {@link RotorSession} */
+  static deJson(raw: JSONValue | undefined, client?: Client): RotorSession | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new RotorSession(client);
+    assign(model, raw, [
+      'id',
+      'acceptedSeeds',
+      'originalSeeds',
+      'allowExplicit',
+      'child',
+      'createdAt',
+      'lastAccess',
+      'descriptionSeed',
+      'incognito',
+      'sessionType',
+      'terminated',
+    ]);
+    model.wave = WaveInfo.deJson(raw['wave'], client) ?? undefined;
+    reportUnknown(client, 'RotorSession', raw, model);
+    return model;
+  }
+}
+
+/** A batch of tracks from a combined rotor session (`rotor/combined/session/new`). */
+export class CombinedSession extends YandexMusicModel {
+  /** Session id. */
+  sessionId?: string;
+  /** Batch id (echoed back when requesting the next batch). */
+  batchId?: string;
+  /** Whether the Halloween ("pumpkin") theme is active. */
+  pumpkin?: boolean;
+  /** The track batch (raw JSON, pending a typed model). */
+  list?: JSONValue;
+
+  /** @see {@link CombinedSession} */
+  static deJson(raw: JSONValue | undefined, client?: Client): CombinedSession | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new CombinedSession(client);
+    assign(model, raw, ['sessionId', 'batchId', 'pumpkin', 'list']);
+    reportUnknown(client, 'CombinedSession', raw, model);
+    return model;
+  }
+}
+
+/** The offline recommendation source list (`rotor/get-offline-recommender`). */
+export class OfflineRecommender extends YandexMusicModel {
+  /** Recommender sources (raw JSON, pending a typed model). */
+  offlineRecommenderSource?: JSONValue;
+
+  /** @see {@link OfflineRecommender} */
+  static deJson(raw: JSONValue | undefined, client?: Client): OfflineRecommender | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new OfflineRecommender(client);
+    assign(model, raw, ['offlineRecommenderSource']);
+    reportUnknown(client, 'OfflineRecommender', raw, model);
+    return model;
+  }
+}
+
+/** A cloned rotor session together with its first track batch (`rotor/session/{id}/clone`). */
+export class ClonedSession extends YandexMusicModel {
+  /** New session id, used for subsequent `rotor/*` calls. */
+  radioSessionId?: string;
+  /** Batch id (echoed back when requesting the next batch). */
+  batchId?: string;
+  /** Whether the Halloween ("pumpkin") theme is active. */
+  pumpkin?: boolean;
+  /** Seeds accepted so far (raw JSON — object shape differs from {@link RotorSession.acceptedSeeds}). */
+  acceptedSeeds?: JSONValue;
+  /** Seed description (raw JSON — object shape differs from {@link RotorSession.descriptionSeed}). */
+  descriptionSeed?: JSONValue;
+  /** The first track batch. */
+  sequence?: Sequence[];
+
+  /** @see {@link ClonedSession} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ClonedSession | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ClonedSession(client);
+    assign(model, raw, ['radioSessionId', 'batchId', 'pumpkin', 'acceptedSeeds', 'descriptionSeed']);
+    model.sequence = deList(Sequence.deJson, raw['sequence'], client);
+    reportUnknown(client, 'ClonedSession', raw, model);
+    return model;
+  }
+}
+
 /** A batch of tracks streamed from a rotor station. */
 export class StationTracksResult extends YandexMusicModel {
   /** Station id. */

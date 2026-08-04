@@ -9,6 +9,8 @@ import {
   reportUnknown,
   Clip,
   Concert,
+  ArtistsWithConcerts,
+  PlayerInformers,
   Credits,
   Metatags,
   Pin,
@@ -19,6 +21,32 @@ import {
   liveProgressMs,
   Client,
   Dashboard,
+  WaveSettings,
+  WaveInfo,
+  RotorSession,
+  CombinedSession,
+  OfflineRecommender,
+  ClonedSession,
+  AlbumSimilarEntities,
+  AlbumDonations,
+  SearchHistoryItem,
+  SearchInstant,
+  About,
+  TopArtistsMonth,
+  CollectionSync,
+  EntityChart,
+  RecentlyPlayed,
+  RecapSlides,
+  Mixes,
+  ArtistFamiliarWave,
+  DisclaimerEntry,
+  Lumen,
+  AlbumIds,
+  AlbumEntitiesIds,
+  PlaylistEntitiesIds,
+  AlbumRelatedContent,
+  UniversalScreenEntitiesPage,
+  ContinueListenBlock,
   DeviceCode,
   Difference,
   GeneratedPlaylist,
@@ -237,6 +265,195 @@ test('rotor models map stations and track sequence', () => {
   });
   assert.equal(tracks?.batchId, 'batch');
   assert.equal(tracks?.sequence?.[0]?.track?.title, 'T');
+});
+
+test('WaveSettings.deJson maps default station and restrictions', () => {
+  const settings = WaveSettings.deJson({
+    defaultStation: { stationId: 'user:1', title: 'Моя волна' },
+    settingRestrictions: {
+      diversity: { type: 'enum', name: 'По характеру', possibleValues: [{ value: 'favorite', name: 'Любимое' }] },
+    },
+  });
+  assert.equal(settings?.defaultStation?.stationId, 'user:1');
+  assert.equal(settings?.settingRestrictions?.diversity?.possibleValues?.[0]?.value, 'favorite');
+});
+
+test('About.deJson maps subscription overview', () => {
+  const about = About.deJson({ hasPlus: true, hasMusicSubscription: false, isChild: false, options: [] });
+  assert.equal(about?.hasPlus, true);
+  assert.equal(about?.hasMusicSubscription, false);
+});
+
+test('WaveInfo.deJson maps the last-listened wave', () => {
+  const wave = WaveInfo.deJson({ name: 'Моя волна', stationId: 'user:onyourwave', seeds: ['user:onyourwave'] });
+  assert.equal(wave?.stationId, 'user:onyourwave');
+  assert.equal(wave?.seeds?.[0], 'user:onyourwave');
+});
+
+test('RotorSession.deJson maps session fields and nested wave', () => {
+  const session = RotorSession.deJson({
+    id: 'new',
+    sessionType: 'track',
+    terminated: false,
+    wave: { name: 'Моя волна', stationId: 'user:onyourwave', type: 'DEFAULT' },
+  });
+  assert.equal(session?.id, 'new');
+  assert.equal(session?.wave?.type, 'DEFAULT');
+});
+
+test('CombinedSession.deJson maps session/batch ids', () => {
+  const combined = CombinedSession.deJson({ sessionId: 's1', batchId: 'b1', pumpkin: false, list: [] });
+  assert.equal(combined?.sessionId, 's1');
+  assert.equal(combined?.batchId, 'b1');
+});
+
+test('OfflineRecommender.deJson maps sources', () => {
+  const rec = OfflineRecommender.deJson({ offlineRecommenderSource: [] });
+  assert.ok(rec);
+  assert.deepEqual(rec.offlineRecommenderSource, []);
+});
+
+test('TopArtistsMonth.deJson maps ranked artists', () => {
+  const top = TopArtistsMonth.deJson({
+    artists: [{ artist: { id: 1, name: 'A' }, listenTimeSeconds: 100, top: { position: 1, progress: 'same' } }],
+  });
+  assert.equal(top?.artists?.[0]?.artist?.name, 'A');
+  assert.equal(top?.artists?.[0]?.top?.position, 1);
+});
+
+test('CollectionSync.deJson maps values', () => {
+  const sync = CollectionSync.deJson({ values: {} });
+  assert.ok(sync);
+  assert.deepEqual(sync.values, {});
+});
+
+test('EntityChart.deJson maps album/podcast chart positions', () => {
+  const chart = EntityChart.deJson({
+    chartType: 'albums',
+    title: 'Топ-100 альбомов года',
+    chartPositions: [{ album: { id: 1, title: 'Album One' } }],
+  });
+  assert.equal(chart?.chartType, 'albums');
+  assert.equal(chart?.chartPositions?.[0]?.album?.title, 'Album One');
+});
+
+test('RecentlyPlayed.deJson maps polymorphic items', () => {
+  const recent = RecentlyPlayed.deJson({ items: [{ type: 'album_item', data: { album: { id: 1 } } }] });
+  assert.equal(recent?.items?.[0]?.type, 'album_item');
+});
+
+test('ClonedSession.deJson maps radioSessionId and sequence', () => {
+  const cloned = ClonedSession.deJson({
+    radioSessionId: 'r1',
+    batchId: 'b1',
+    sequence: [{ type: 'track', track: { id: 1, title: 'T' } }],
+  });
+  assert.equal(cloned?.radioSessionId, 'r1');
+  assert.equal(cloned?.sequence?.[0]?.track?.title, 'T');
+});
+
+test('AlbumSimilarEntities.deJson maps raw items (reused for tracksSimilarEntities)', () => {
+  const entities = AlbumSimilarEntities.deJson({ items: [{ type: 'wave_agent_item' }] });
+  const item = entities?.items?.[0] as { type?: string } | undefined;
+  assert.equal(item?.type, 'wave_agent_item');
+});
+
+test('AlbumDonations.deJson maps donations', () => {
+  const donations = AlbumDonations.deJson({ donations: [] });
+  assert.ok(donations);
+  assert.deepEqual(donations.donations, []);
+});
+
+test('SearchHistoryItem.deJson resolves the entity keyed by type', () => {
+  const item = SearchHistoryItem.deJson({ type: 'artist', artist: { id: 1, name: 'A' } });
+  assert.equal(item?.type, 'artist');
+  assert.equal((item?.entity as { name?: string } | undefined)?.name, 'A');
+});
+
+test('SearchInstant.deJson resolves entities and filters', () => {
+  const instant = SearchInstant.deJson({
+    text: 'foo',
+    results: [{ type: 'track', track: { id: 1, title: 'T' } }],
+    filters: [{ id: 'f1', displayName: 'Filter 1' }],
+  });
+  assert.equal(instant?.text, 'foo');
+  assert.equal((instant?.results?.[0]?.entity as { title?: string } | undefined)?.title, 'T');
+  assert.equal(instant?.filters?.[0]?.displayName, 'Filter 1');
+});
+
+test('Mixes.deJson maps mix cards', () => {
+  const mixes = Mixes.deJson({ items: [{ type: 'mix', data: { id: 'm1', title: 'Mix', covers: ['c1'] } }] });
+  assert.equal(mixes?.items?.[0]?.data?.id, 'm1');
+  assert.equal(mixes?.items?.[0]?.data?.covers?.[0], 'c1');
+});
+
+test('ArtistFamiliarWave.deJson maps tracks nested under wave', () => {
+  const wave = ArtistFamiliarWave.deJson({ wave: { tracks: [{ id: 1, title: 'T' }] } });
+  assert.equal(wave?.tracks?.[0]?.title, 'T');
+});
+
+test('RecapSlides.deJson maps logo and raw slides', () => {
+  const recap = RecapSlides.deJson({ logo: 'l.png', slides: [{ id: 'open', background: {} }] });
+  assert.equal(recap?.logo, 'l.png');
+  const slides = recap?.slides as Array<{ id: string }> | undefined;
+  assert.equal(slides?.[0]?.id, 'open');
+});
+
+test('DisclaimerEntry.deJson maps the flat template shape', () => {
+  const entry = DisclaimerEntry.deJson({ id: 'd1', type: 'foreignAgent', title: 'Notice', reason: 'policy' });
+  assert.equal(entry?.id, 'd1');
+  assert.equal(entry?.reason, 'policy');
+});
+
+test('Lumen.deJson maps status and raw themes', () => {
+  const lumen = Lumen.deJson({ status: 'ok', themes: { primary: '#fff' } });
+  assert.equal(lumen?.status, 'ok');
+  assert.deepEqual(lumen?.themes, { primary: '#fff' });
+});
+
+test('AlbumIds.deJson maps title and album ids', () => {
+  const ids = AlbumIds.deJson({ title: 'Cat', albums: ['1', '2'] });
+  assert.equal(ids?.title, 'Cat');
+  assert.deepEqual(ids?.albums, ['1', '2']);
+});
+
+test('AlbumEntitiesIds.deJson maps album ids from the entities key', () => {
+  const ids = AlbumEntitiesIds.deJson({ title: 'Compilation', entities: ['3', '4'] });
+  assert.equal(ids?.title, 'Compilation');
+  assert.deepEqual(ids?.albums, ['3', '4']);
+});
+
+test('PlaylistEntitiesIds.deJson maps playlist ids from the entities key', () => {
+  const ids = PlaylistEntitiesIds.deJson({ title: 'Playlists', entities: [{ uid: 1, kind: 2 }] });
+  assert.equal(ids?.title, 'Playlists');
+  assert.equal(ids?.playlists?.[0]?.playlistId, '1:2');
+});
+
+test('AlbumRelatedContent.deJson maps polymorphic blocks', () => {
+  const content = AlbumRelatedContent.deJson({ blocks: [{ id: 'b1', type: 'similar-albums' }] });
+  assert.equal(content?.blocks?.[0]?.type, 'similar-albums');
+});
+
+test('UniversalScreenEntitiesPage.deJson maps polymorphic items', () => {
+  const page = UniversalScreenEntitiesPage.deJson({ title: 'Page', items: [{ type: 'album' }] });
+  assert.equal(page?.title, 'Page');
+  assert.equal(page?.items?.[0]?.type, 'album');
+});
+
+test('ContinueListenBlock.deJson maps the three raw sub-blocks', () => {
+  const block = ContinueListenBlock.deJson({ bookshelf: {}, newEpisodes: {}, lastPlayed: null });
+  assert.ok(block);
+  assert.deepEqual(block.bookshelf, {});
+});
+
+test('ArtistsWithConcerts.deJson maps raw items', () => {
+  const entities = ArtistsWithConcerts.deJson({ items: [{ type: 'artist' }] });
+  assert.equal(entities?.items?.length, 1);
+});
+
+test('PlayerInformers.deJson maps raw informers', () => {
+  const informers = PlayerInformers.deJson({ informers: [{ trackId: '1' }] });
+  assert.equal(informers?.informers?.length, 1);
 });
 
 test('Queue.deJson maps context and track refs', () => {
@@ -471,6 +688,53 @@ test('client exposes the new method surface', () => {
     'rotorStationTracks',
     'rotorStationFeedbackTrackStarted',
     'rotorStationSettings2',
+    'rotorWaveSettings',
+    'rotorWaveLast',
+    'rotorWaveLastReset',
+    'rotorSessionNew',
+    'rotorCombinedSessionNew',
+    'rotorGetOfflineRecommender',
+    'rotorSessionsFeedbacks',
+    'rotorSessionTracks',
+    'rotorSessionClone',
+    'rotorCombinedSessionNext',
+    'tracksSimilarEntities',
+    'usersSearchHistory',
+    'usersSearchHistoryClear',
+    'searchInstant',
+    'playsBulk',
+    'albumsDonations',
+    'accountAbout',
+    'personalTopArtistsMonth',
+    'collectionSync',
+    'chartAlbums',
+    'chartPodcasts',
+    'nonMusicBookshelf',
+    'nonMusicCatalogue',
+    'nonMusicNewEpisodes',
+    'landingRecentlyPlayed',
+    'landingMixes',
+    'landingBlockEntities',
+    'landingBlocksEntitiesTag',
+    'landingBlocksNonMusicContinueListen',
+    'lumen',
+    'nonMusicCategoryAlbums',
+    'nonMusicCompilation',
+    'nonMusicEditorialAlbum',
+    'nonMusicEditorialPlaylist',
+    'childrenLandingCategoryAlbums',
+    'childrenLandingCompilation',
+    'childrenLandingEditorialAlbum',
+    'childrenLandingEditorialPlaylist',
+    'disclaimers',
+    'albumsRelatedContent',
+    'concertsLandingArtists',
+    'playerInformers',
+    'feedPlaylistsSeen',
+    'artistsFamiliarYou',
+    'recapSlidesUser',
+    'recapSlidesKids',
+    'recapSlidesArtist',
     'queuesList',
     'queue',
     'queueUpdatePosition',

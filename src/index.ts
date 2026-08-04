@@ -85,6 +85,7 @@ export {
   ArtistDonationData,
   ArtistDonationGoal,
   ArtistSkeleton,
+  ArtistFamiliarWave,
 } from './models/artist/artistExtras.js';
 export { Feed, Day, Event, TrackWithAds, AlbumEvent, ArtistEvent } from './models/feed/feed.js';
 export { TagResult } from './models/tagResult.js';
@@ -96,7 +97,16 @@ export type { ArtistAlbumsSortBy, SortOrder } from './methods/artists.js';
 export { Album, Label, TrackPosition, Deprecation, AlbumActionButton } from './models/album/album.js';
 
 // Models — account
-export { Status, Account, PassportPhone } from './models/account/account.js';
+export {
+  Status,
+  Account,
+  PassportPhone,
+  About,
+  TopPosition,
+  TopArtistEntry,
+  TopArtistsMonth,
+  CollectionSync,
+} from './models/account/account.js';
 export {
   Permissions,
   Plus,
@@ -123,7 +133,13 @@ export {
 export { Supplement, Lyrics, VideoSupplement } from './models/supplement.js';
 export { Shot, ShotData, ShotType, ShotEvent } from './models/shot.js';
 export { TrailerInfo } from './models/trailerInfo.js';
-export { AlbumTrailer, AlbumSimilarEntities } from './models/album/albumExtras.js';
+export {
+  AlbumTrailer,
+  AlbumSimilarEntities,
+  AlbumDonations,
+  AlbumRelatedContent,
+  AlbumRelatedContentBlock,
+} from './models/album/albumExtras.js';
 
 // Models — playlist / user / video / track refs
 export { Playlist } from './models/playlist/playlist.js';
@@ -154,9 +170,18 @@ export { Video } from './models/video.js';
 export { TrackShort, TrackId } from './models/trackShort.js';
 
 // Models — search
-export { Search, SearchResult, Best, Suggestions } from './models/search/search.js';
+export {
+  Search,
+  SearchResult,
+  Best,
+  Suggestions,
+  SearchHistoryItem,
+  SearchInstant,
+  SearchInstantItem,
+  SearchFilter,
+} from './models/search/search.js';
 export type { SearchEntity } from './models/search/search.js';
-export type { SearchType } from './methods/search.js';
+export type { SearchType, SearchInstantOptions } from './methods/search.js';
 
 // Models — likes / device auth
 export { Like, TracksList } from './models/like.js';
@@ -166,7 +191,26 @@ export type { OnCodeCallback, DeviceAuthOptions } from './methods/deviceAuth.js'
 export type { PlayAudioOptions } from './methods/tracks.js';
 
 // Models — landing
-export { Landing, Block, BlockEntity, LandingList, ChartInfo, Chart, ChartItem } from './models/landing/landing.js';
+export {
+  Landing,
+  Block,
+  BlockEntity,
+  LandingList,
+  ChartInfo,
+  Chart,
+  ChartItem,
+  EntityChart,
+  EntityChartPosition,
+  RecentlyPlayed,
+  RecentlyPlayedItem,
+  RecapSlides,
+  Mixes,
+  MixEntity,
+  UniversalScreenEntitiesPage,
+  UniversalEntity,
+  ContinueListenBlock,
+  MixEntityData,
+} from './models/landing/landing.js';
 export type { BlockEntityData } from './models/landing/landing.js';
 export { Promotion, PlayContext, MixLink, TrackShortOld } from './models/landing/entities.js';
 export { Genre, GenreTitle } from './models/genre.js';
@@ -186,6 +230,14 @@ export {
   DiscreteScale,
   Value,
   AdParams,
+  WaveSettings,
+  WaveDefaultStation,
+  WaveSettingRestrictions,
+  WaveInfo,
+  RotorSession,
+  CombinedSession,
+  OfflineRecommender,
+  ClonedSession,
 } from './models/rotor/rotor.js';
 export type {
   RotorFeedbackType,
@@ -216,12 +268,16 @@ export {
   ConcertTabConfigData,
   ConcertTabRange,
   ConcertSkeleton,
+  ArtistsWithConcerts,
 } from './models/concert/concert.js';
+export { PlayerInformers } from './models/playerInformers.js';
 
 // Models — clips / credits / disclaimers / labels / metatags / pins / presaves
 export { Clip, ClipsWillLike } from './models/clip.js';
 export { Credit, Credits } from './models/credit.js';
-export { Disclaimer, ForeignAgent } from './models/disclaimer.js';
+export { Disclaimer, ForeignAgent, DisclaimerEntry } from './models/disclaimer.js';
+export { Lumen } from './models/lumen.js';
+export { AlbumIds, AlbumEntitiesIds, PlaylistEntitiesIds } from './models/catalogBrowsing.js';
 export { LabelAlbums, LabelArtists } from './models/label/labelExtras.js';
 export {
   Metatags,

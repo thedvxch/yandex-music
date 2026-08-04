@@ -17,6 +17,7 @@ import {
   ArtistClips,
   ArtistDonations,
   ArtistSkeleton,
+  ArtistFamiliarWave,
 } from '../models/artist/artistExtras.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
@@ -262,6 +263,17 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      */
     async artistsSkeleton(artistId: string | number, skeletonId: string): Promise<ArtistSkeleton | null> {
       return this.getModel(`${this.baseUrl}/artists/${artistId}/skeletons/${skeletonId}`, ArtistSkeleton.deJson);
+    }
+
+    /**
+     * Fetch wave tracks "familiar" to the user for an artist.
+     *
+     * @param artistId - The artist id.
+     * @returns The familiar wave, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async artistsFamiliarYou(artistId: string | number): Promise<ArtistFamiliarWave | null> {
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/familiar-you`, ArtistFamiliarWave.deJson);
     }
   }
 

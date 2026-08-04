@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
-import { Status } from '../models/account/account.js';
+import { About, CollectionSync, Status, TopArtistsMonth } from '../models/account/account.js';
 import {
   Experiments,
   ExperimentsDetails,
@@ -51,6 +51,17 @@ export function AccountMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      */
     async accountStatus(): Promise<Status | null> {
       return this.getModel(`${this.baseUrl}/account/status`, Status.deJson);
+    }
+
+    /**
+     * Fetch a brief subscription overview for the authenticated account.
+     *
+     * @returns The overview, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async accountAbout(): Promise<About | null> {
+      const result = await this.request.get(`${this.baseUrl}/account/about`);
+      return About.deJson(result, this as unknown as Client);
     }
 
     /**
@@ -140,6 +151,28 @@ export function AccountMixin<TBase extends AbstractConstructor<ClientBase>>(Base
         language: language ?? this.language,
       });
       return PromoCodeStatus.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the authenticated user's most-listened artists this month.
+     *
+     * @returns The ranking, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async personalTopArtistsMonth(): Promise<TopArtistsMonth | null> {
+      const result = await this.request.get(`${this.baseUrl}/personal/top/artists/month`);
+      return TopArtistsMonth.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Sync the client's local library state with the server.
+     *
+     * @returns The sync result, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async collectionSync(): Promise<CollectionSync | null> {
+      const result = await this.request.post(`${this.baseUrl}/collection/sync`);
+      return CollectionSync.deJson(result, this as unknown as Client);
     }
   }
 

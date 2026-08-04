@@ -4,9 +4,19 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
-import { deList } from '../base.js';
+import { deList, isJsonObject } from '../base.js';
 import { Status } from '../models/account/account.js';
-import { Dashboard, StationResult, StationTracksResult } from '../models/rotor/rotor.js';
+import {
+  ClonedSession,
+  CombinedSession,
+  Dashboard,
+  OfflineRecommender,
+  RotorSession,
+  StationResult,
+  StationTracksResult,
+  WaveInfo,
+  WaveSettings,
+} from '../models/rotor/rotor.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 import type { Params } from '../request.js';
@@ -260,6 +270,123 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       }
       const result = await this.request.post(url, data);
       return result === 'ok';
+    }
+
+    /**
+     * Fetch the "My Wave" default station and personalization options.
+     *
+     * @returns The wave settings, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorWaveSettings(): Promise<WaveSettings | null> {
+      const result = await this.request.get(`${this.baseUrl}/rotor/wave/settings`);
+      return WaveSettings.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the "My Wave" station the user last listened to.
+     *
+     * @returns The wave, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorWaveLast(): Promise<WaveInfo | null> {
+      const result = await this.request.get(`${this.baseUrl}/rotor/wave/last`);
+      return WaveInfo.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Reset the "My Wave" last-listened station back to the default.
+     *
+     * @returns Whether the operation succeeded.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorWaveLastReset(): Promise<boolean> {
+      const result = await this.request.post(`${this.baseUrl}/rotor/wave/last/reset`);
+      return result === 'ok' || isJsonObject(result);
+    }
+
+    /**
+     * Start a new rotor listening session.
+     *
+     * @param includeWaveModel - Whether to include the nested wave model in the response.
+     * @returns The session, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorSessionNew(includeWaveModel = true): Promise<RotorSession | null> {
+      const result = await this.request.get(`${this.baseUrl}/rotor/session/new`, {
+        includeWaveModel: String(includeWaveModel),
+      });
+      return RotorSession.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Start a new combined rotor session and fetch its first track batch.
+     *
+     * @returns The session and its first batch, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorCombinedSessionNew(): Promise<CombinedSession | null> {
+      const result = await this.request.post(`${this.baseUrl}/rotor/combined/session/new`);
+      return CombinedSession.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the offline recommendation sources.
+     *
+     * @returns The sources, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorGetOfflineRecommender(): Promise<OfflineRecommender | null> {
+      const result = await this.request.post(`${this.baseUrl}/rotor/get-offline-recommender`);
+      return OfflineRecommender.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Send a batch of rotor session feedback events.
+     *
+     * @param data - Feedback payload (shape mirrors {@link rotorStationFeedback}).
+     * @returns Whether the operation succeeded.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorSessionsFeedbacks(data: Params = {}): Promise<boolean> {
+      const result = await this.request.post(`${this.baseUrl}/rotor/sessions/feedbacks`, data);
+      return result === 'ok' || isJsonObject(result);
+    }
+
+    /**
+     * Fetch the next track batch for a rotor session.
+     *
+     * @param sessionId - The session id, from {@link rotorSessionNew}.
+     * @returns The track batch, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorSessionTracks(sessionId: string): Promise<StationTracksResult | null> {
+      const result = await this.request.post(`${this.baseUrl}/rotor/session/${sessionId}/tracks`);
+      return StationTracksResult.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Clone a rotor session and fetch its first track batch.
+     *
+     * @param sessionId - The session id to clone, from {@link rotorSessionNew}.
+     * @returns The cloned session and its first batch, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorSessionClone(sessionId: string): Promise<ClonedSession | null> {
+      const result = await this.request.post(`${this.baseUrl}/rotor/session/${sessionId}/clone`);
+      return ClonedSession.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the next track batch for a combined rotor session.
+     *
+     * @param radioSessionId - The session id, from {@link rotorCombinedSessionNew}.
+     * @returns The next batch, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async rotorCombinedSessionNext(radioSessionId: string): Promise<CombinedSession | null> {
+      const result = await this.request.post(`${this.baseUrl}/rotor/combined/session/${radioSessionId}/next`);
+      return CombinedSession.deJson(result, this as unknown as Client);
     }
   }
 

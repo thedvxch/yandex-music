@@ -4,7 +4,8 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
-import { Disclaimer } from '../models/disclaimer.js';
+import { deList } from '../base.js';
+import { Disclaimer, DisclaimerEntry } from '../models/disclaimer.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -63,6 +64,17 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
     async artistsDisclaimer(artistId: string | number): Promise<Disclaimer | null> {
       const result = await this.request.get(`${this.baseUrl}/artists/${artistId}/disclaimer`);
       return Disclaimer.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the global disclaimer templates.
+     *
+     * @returns The disclaimer entries.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async disclaimers(): Promise<DisclaimerEntry[]> {
+      const result = await this.request.get(`${this.baseUrl}/disclaimers`);
+      return deList(DisclaimerEntry.deJson, result, this as unknown as Client);
     }
   }
 

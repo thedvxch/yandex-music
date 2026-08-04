@@ -26,6 +26,39 @@ export class ForeignAgent extends YandexMusicModel {
   }
 }
 
+/**
+ * A global disclaimer template entry (`disclaimers`).
+ *
+ * @remarks Distinct from {@link Disclaimer} — this is the flat, top-level template
+ * shape (`id`/`type`/`title`/`description`), not the per-entity `foreignAgent`/`modal`
+ * wrapper attached to tracks, clips, albums and artists.
+ */
+export class DisclaimerEntry extends YandexMusicModel {
+  /** Disclaimer id. */
+  id?: string;
+  /** Disclaimer type. */
+  type?: string;
+  /** Reason (known value: `policy`). */
+  reason?: string;
+  /** Title. */
+  title?: string;
+  /** Description. */
+  description?: string;
+  /** Extra details (raw JSON, pending a typed model). */
+  details?: JSONValue;
+
+  /** @see {@link DisclaimerEntry} */
+  static deJson(raw: JSONValue | undefined, client?: Client): DisclaimerEntry | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new DisclaimerEntry(client);
+    assign(model, raw, ['id', 'type', 'reason', 'title', 'description', 'details']);
+    reportUnknown(client, 'DisclaimerEntry', raw, model);
+    return model;
+  }
+}
+
 /** A legal disclaimer attached to a track, clip, album or artist. */
 export class Disclaimer extends YandexMusicModel {
   /** The foreign-agent notice, when present. */

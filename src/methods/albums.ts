@@ -5,7 +5,7 @@
  */
 import { ClientBase } from '../clientBase.js';
 import { Album } from '../models/album/album.js';
-import { AlbumSimilarEntities, AlbumTrailer } from '../models/album/albumExtras.js';
+import { AlbumDonations, AlbumRelatedContent, AlbumSimilarEntities, AlbumTrailer } from '../models/album/albumExtras.js';
 import type { AbstractConstructor } from './mixin.js';
 
 /**
@@ -59,6 +59,28 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      */
     async albumsTrailer(albumId: string | number): Promise<AlbumTrailer | null> {
       return this.getModel(`${this.baseUrl}/albums/${albumId}/trailer`, AlbumTrailer.deJson);
+    }
+
+    /**
+     * Fetch the donations made on an album.
+     *
+     * @param albumId - The album id.
+     * @returns The donations, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async albumsDonations(albumId: string | number): Promise<AlbumDonations | null> {
+      return this.getModel(`${this.baseUrl}/donation/albums/${albumId}`, AlbumDonations.deJson);
+    }
+
+    /**
+     * Fetch content related to an album.
+     *
+     * @param albumId - The album id.
+     * @returns The related content, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async albumsRelatedContent(albumId: string | number): Promise<AlbumRelatedContent | null> {
+      return this.getModel(`${this.baseUrl}/albums/${albumId}/related-content`, AlbumRelatedContent.deJson);
     }
   }
 

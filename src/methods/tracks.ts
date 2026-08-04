@@ -3,9 +3,11 @@
  *
  * @packageDocumentation
  */
+import { randomUUID } from 'node:crypto';
 import { ClientBase } from '../clientBase.js';
 import { isJsonObject } from '../base.js';
 import { Track } from '../models/track/track.js';
+import { AlbumSimilarEntities } from '../models/album/albumExtras.js';
 import {
   DownloadInfo,
   LosslessDownloadInfo,
@@ -15,6 +17,7 @@ import {
   TrackTrailer,
 } from '../models/track/extras.js';
 import { Supplement } from '../models/supplement.js';
+import { PlayerInformers } from '../models/playerInformers.js';
 import { ShotEvent } from '../models/shot.js';
 import {
   getSignRequest,
@@ -161,6 +164,17 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
     }
 
     /**
+     * Fetch entities similar to a track (waves startable from it, similar artists, …).
+     *
+     * @param trackId - The track id.
+     * @returns The similar entities, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async tracksSimilarEntities(trackId: string | number): Promise<AlbumSimilarEntities | null> {
+      return this.getModel(`${this.baseUrl}/tracks/${trackId}/similar-entities`, AlbumSimilarEntities.deJson);
+    }
+
+    /**
      * Fetch full information about a track.
      *
      * @param trackId - The track id.
@@ -219,6 +233,62 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
       };
       const result = await this.request.post(`${this.baseUrl}/play-audio`, data);
       return result === 'ok';
+    }
+
+    /**
+     * Report multiple playback events in a single batch (`/plays`).
+     *
+     * @param items - The playback reports.
+     * @param clientNow - ISO client timestamp for the whole batch. Defaults to now.
+     * @returns Whether the report was accepted.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async playsBulk(items: PlayAudioOptions[], clientNow?: string): Promise<boolean> {
+      const now = new Date().toISOString();
+      const plays = items.map((options) => ({
+        trackId: String(options.trackId),
+        albumId: String(options.albumId),
+        playlistId: options.playlistId,
+        fromCache: options.fromCache ?? false,
+        from: options.from,
+        // The server rejects the batch outright ("Parameters requirements are not
+        // met") when playId is empty/absent, unlike the single-track /play-audio.
+        playId: options.playId || randomUUID(),
+        timestamp: options.timestamp ?? now,
+        trackLengthSeconds: options.trackLengthSeconds,
+        totalPlayedSeconds: options.totalPlayedSeconds,
+        endPositionSeconds: options.endPositionSeconds,
+      }));
+      const url = `${this.baseUrl}/plays?client-now=${encodeURIComponent(clientNow ?? now)}`;
+      // JSON round-trip drops the `undefined` fields JSONValue can't represent.
+      const result = await this.request.postJson(url, JSON.parse(JSON.stringify({ plays })));
+      return result === 'ok';
+    }
+
+    /**
+     * Fetch player informer banners for a batch of tracks.
+     *
+     * @param tracks - The tracks to fetch informers for.
+     * @param locations - Location ids to filter by.
+     * @returns The informers, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async playerInformers(
+      tracks: Array<{ trackId: string | number; artistIds: Array<string | number>; albumId?: string | number }>,
+      locations?: Array<string | number>,
+    ): Promise<PlayerInformers | null> {
+      const url = locations?.length
+        ? `${this.baseUrl}/player-informers?locations=${locations.join(',')}`
+        : `${this.baseUrl}/player-informers`;
+      const body = {
+        tracks: tracks.map((t) => ({
+          trackId: String(t.trackId),
+          artistIds: t.artistIds?.map(String),
+          albumId: t.albumId !== undefined ? String(t.albumId) : undefined,
+        })),
+      };
+      const result = await this.request.postJson(url, JSON.parse(JSON.stringify(body)));
+      return PlayerInformers.deJson(result, this as unknown as Client);
     }
 
     /**

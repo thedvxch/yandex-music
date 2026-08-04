@@ -427,3 +427,21 @@ export class ArtistSkeleton extends YandexMusicModel {
     return model;
   }
 }
+
+/** Wave tracks "familiar" to the user for an artist (`artists/{id}/familiar-you`). */
+export class ArtistFamiliarWave extends YandexMusicModel {
+  /** The tracks. */
+  tracks?: Track[];
+
+  /** @see {@link ArtistFamiliarWave} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ArtistFamiliarWave | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const wave = isJsonObject(raw['wave']) ? raw['wave'] : raw;
+    const model = new ArtistFamiliarWave(client);
+    model.tracks = deList(Track.deJson, wave['tracks'], client);
+    reportUnknown(client, 'ArtistFamiliarWave', raw, model);
+    return model;
+  }
+}

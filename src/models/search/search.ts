@@ -11,11 +11,12 @@ import { Video } from '../video.js';
 import { User } from '../user.js';
 import { Playlist } from '../playlist/playlist.js';
 import { Clip } from '../clip.js';
+import { Concert } from '../concert/concert.js';
 import type { Client } from '../../client.js';
 import type { DeJson, JSONValue } from '../../types.js';
 
 /** Any entity that can be a search result or a "best match". */
-export type SearchEntity = Track | Artist | Album | Playlist | Video | User | Clip;
+export type SearchEntity = Track | Artist | Album | Playlist | Video | User | Clip | Concert;
 
 /** Maps an API result `type` to the model deserializer that handles it. */
 const TYPE_TO_DEJSON: Record<string, DeJson<SearchEntity>> = {
@@ -28,6 +29,7 @@ const TYPE_TO_DEJSON: Record<string, DeJson<SearchEntity>> = {
   podcast: Album.deJson,
   podcast_episode: Track.deJson,
   clip: Clip.deJson,
+  concert: Concert.deJson,
 };
 
 /**
@@ -73,6 +75,113 @@ export class SearchResult<T extends SearchEntity = SearchEntity> extends YandexM
     }
     model.results = deList(deJson, raw['results'], client);
     reportUnknown(client, 'SearchResult', raw, model);
+    return model;
+  }
+}
+
+/** One entry of the user's search history (`users/{uid}/search-history`). */
+export class SearchHistoryItem extends YandexMusicModel {
+  /** Entity type (for example `artist`). */
+  type?: string;
+  /** The resolved entity, keyed in the raw payload by {@link type} (for example `artist`). */
+  entity?: SearchEntity;
+
+  /** @see {@link SearchHistoryItem} */
+  static deJson(raw: JSONValue | undefined, client?: Client): SearchHistoryItem | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new SearchHistoryItem(client);
+    assign(model, raw, ['type']);
+    const deJsonFn = model.type ? TYPE_TO_DEJSON[model.type] : undefined;
+    model.entity = deJsonFn ? (deJsonFn(raw[model.type!], client) ?? undefined) : undefined;
+    reportUnknown(client, 'SearchHistoryItem', raw, model);
+    return model;
+  }
+}
+
+/** One entity result of `search/instant/mixed` (the search-as-you-type variant of {@link Search}). */
+export class SearchInstantItem extends YandexMusicModel {
+  /** Entity type (for example `track`, `artist`, `album`). */
+  type?: string;
+  /**
+   * The resolved entity, keyed in the raw payload by {@link type}.
+   *
+   * @remarks The API also returns a family of `best_result_*` UI-widget variants and
+   * `wave`/`q2v_wave` fields alongside the main entity; those remain unmapped (this
+   * endpoint's primary value is the entity itself, not its "best match" card rendering).
+   */
+  entity?: SearchEntity;
+
+  /** @see {@link SearchInstantItem} */
+  static deJson(raw: JSONValue | undefined, client?: Client): SearchInstantItem | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new SearchInstantItem(client);
+    assign(model, raw, ['type']);
+    const deJsonFn = model.type ? TYPE_TO_DEJSON[model.type] : undefined;
+    model.entity = deJsonFn ? (deJsonFn(raw[model.type!], client) ?? undefined) : undefined;
+    reportUnknown(client, 'SearchInstantItem', raw, model);
+    return model;
+  }
+}
+
+/** A search filter option (`search/instant/mixed`). */
+export class SearchFilter extends YandexMusicModel {
+  /** Filter id. */
+  id?: string;
+  /** Display name. */
+  displayName?: string;
+
+  /** @see {@link SearchFilter} */
+  static deJson(raw: JSONValue | undefined, client?: Client): SearchFilter | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new SearchFilter(client);
+    assign(model, raw, ['id', 'displayName']);
+    reportUnknown(client, 'SearchFilter', raw, model);
+    return model;
+  }
+}
+
+/** The search-as-you-type result (`search/instant/mixed`). */
+export class SearchInstant extends YandexMusicModel {
+  /** Echoed query text. */
+  text?: string;
+  /** Search request id, for feedback/analytics correlation. */
+  searchRequestId?: string;
+  /** Whether this is the last page of results. */
+  lastPage?: boolean;
+  /** Whether the query was auto-corrected. */
+  misspellCorrected?: boolean;
+  /** The corrected query text. */
+  misspellResult?: string;
+  /** The original (pre-correction) query text. */
+  misspellOriginal?: string;
+  /** The matched entities. */
+  results?: SearchInstantItem[];
+  /** Available result-type filters. */
+  filters?: SearchFilter[];
+
+  /** @see {@link SearchInstant} */
+  static deJson(raw: JSONValue | undefined, client?: Client): SearchInstant | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new SearchInstant(client);
+    assign(model, raw, [
+      'text',
+      'searchRequestId',
+      'lastPage',
+      'misspellCorrected',
+      'misspellResult',
+      'misspellOriginal',
+    ]);
+    model.results = deList(SearchInstantItem.deJson, raw['results'], client);
+    model.filters = deList(SearchFilter.deJson, raw['filters'], client);
+    reportUnknown(client, 'SearchInstant', raw, model);
     return model;
   }
 }
