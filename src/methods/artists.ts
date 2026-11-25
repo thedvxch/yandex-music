@@ -257,11 +257,11 @@ export function ArtistsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * Fetch a skeleton (page layout) of an artist.
      *
      * @param artistId - The artist id.
-     * @param skeletonId - The skeleton id.
+     * @param skeletonId - The skeleton id. Defaults to `'web-artist-default'`.
      * @returns The skeleton, or `null`.
      * @throws {YandexMusicError} On any transport or API error.
      */
-    async artistsSkeleton(artistId: string | number, skeletonId: string): Promise<ArtistSkeleton | null> {
+    async artistsSkeleton(artistId: string | number, skeletonId = 'web-artist-default'): Promise<ArtistSkeleton | null> {
       return this.getModel(`${this.baseUrl}/artists/${artistId}/skeletons/${skeletonId}`, ArtistSkeleton.deJson);
     }
 

@@ -6,6 +6,7 @@
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Cover } from '../common.js';
+import { SkeletonBlock } from '../skeleton.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -367,8 +368,8 @@ export class ConcertSkeleton extends YandexMusicModel {
   id?: string;
   /** Skeleton title. */
   title?: string;
-  /** Skeleton blocks (raw JSON, pending a typed `SkeletonBlock` model). */
-  blocks?: JSONValue[];
+  /** Skeleton blocks. */
+  blocks?: SkeletonBlock[];
 
   /** @see {@link ConcertSkeleton} */
   static deJson(raw: JSONValue | undefined, client?: Client): ConcertSkeleton | null {
@@ -377,7 +378,7 @@ export class ConcertSkeleton extends YandexMusicModel {
     }
     const model = new ConcertSkeleton(client);
     assign(model, raw, ['id', 'title']);
-    model.blocks = Array.isArray(raw['blocks']) ? (raw['blocks'] as JSONValue[]) : undefined;
+    model.blocks = deList(SkeletonBlock.deJson, raw['blocks'], client);
     reportUnknown(client, 'ConcertSkeleton', raw, model);
     return model;
   }

@@ -165,6 +165,8 @@ export class R128 extends YandexMusicModel {
   i?: number;
   /** True peak (dBTP). */
   tp?: number;
+  /** Number of significant seconds of the track. */
+  importantSecs?: number;
 
   /** @see {@link R128} */
   static deJson(raw: JSONValue | undefined, client?: Client): R128 | null {
@@ -172,7 +174,7 @@ export class R128 extends YandexMusicModel {
       return null;
     }
     const model = new R128(client);
-    assign(model, raw, ['i', 'tp']);
+    assign(model, raw, ['i', 'tp', 'importantSecs']);
     reportUnknown(client, 'R128', raw, model);
     return model;
   }

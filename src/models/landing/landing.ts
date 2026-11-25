@@ -15,7 +15,8 @@ import { TrackId } from '../trackShort.js';
 import { Playlist } from '../playlist/playlist.js';
 import { Album } from '../album/album.js';
 import { GeneratedPlaylist } from '../playlist/playlistExtras.js';
-import { Promotion, PlayContext, MixLink } from './entities.js';
+import { Promotion, PlayContext, MixLink, PersonalPlaylistsData, PlayContextsData } from './entities.js';
+import { PlaylistId } from '../playlist/playlistId.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -106,8 +107,12 @@ export class Block extends YandexMusicModel {
   entities?: BlockEntity[];
   /** Block description. */
   description?: string;
-  /** Block-level data (raw JSON, pending typed variants). */
-  data?: JSONValue;
+  /**
+   * Block-level data, chosen by {@link type}: `personal-playlists` gives
+   * {@link PersonalPlaylistsData}, `play-contexts` gives {@link PlayContextsData};
+   * any other type keeps the raw JSON value.
+   */
+  data?: PersonalPlaylistsData | PlayContextsData | JSONValue;
   /** Background image URI template. */
   backgroundImageUrl?: string;
   /** Background video identifier. */
@@ -133,13 +138,22 @@ export class Block extends YandexMusicModel {
       'typeForFrom',
       'title',
       'description',
-      'data',
       'backgroundImageUrl',
       'backgroundVideoId',
       'backgroundVideoUrl',
       'playContext',
     ]);
     model.entities = deList(BlockEntity.deJson, raw['entities'], client);
+    switch (model.type) {
+      case 'personal-playlists':
+        model.data = PersonalPlaylistsData.deJson(raw['data'], client) ?? undefined;
+        break;
+      case 'play-contexts':
+        model.data = PlayContextsData.deJson(raw['data'], client) ?? undefined;
+        break;
+      default:
+        model.data = raw['data'];
+    }
     reportUnknown(client, 'Block', raw, model);
     return model;
   }
@@ -181,8 +195,8 @@ export class LandingList extends YandexMusicModel {
   id?: string;
   /** New release album ids. */
   newReleases?: number[];
-  /** New playlist references (raw JSON, pending a typed model). */
-  newPlaylists?: JSONValue[];
+  /** New playlist references. */
+  newPlaylists?: PlaylistId[];
   /** Podcast album ids. */
   podcasts?: number[];
 
@@ -192,7 +206,8 @@ export class LandingList extends YandexMusicModel {
       return null;
     }
     const model = new LandingList(client);
-    assign(model, raw, ['type', 'typeForFrom', 'title', 'id', 'newReleases', 'newPlaylists', 'podcasts']);
+    assign(model, raw, ['type', 'typeForFrom', 'title', 'id', 'newReleases', 'podcasts']);
+    model.newPlaylists = deList(PlaylistId.deJson, raw['newPlaylists'], client);
     reportUnknown(client, 'LandingList', raw, model);
     return model;
   }
@@ -471,6 +486,44 @@ export class RecapSlides extends YandexMusicModel {
   }
 }
 
+/** A single entry of a {@link ChartInfoMenu}. */
+export class ChartInfoMenuItem extends YandexMusicModel {
+  /** Item title. */
+  title?: string;
+  /** Item URL. */
+  url?: string;
+  /** Whether the item is currently selected. */
+  selected?: boolean;
+
+  /** @see {@link ChartInfoMenuItem} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ChartInfoMenuItem | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ChartInfoMenuItem(client);
+    assign(model, raw, ['title', 'url', 'selected']);
+    reportUnknown(client, 'ChartInfoMenuItem', raw, model);
+    return model;
+  }
+}
+
+/** The menu of a {@link ChartInfo} page. */
+export class ChartInfoMenu extends YandexMusicModel {
+  /** The menu items. */
+  items?: ChartInfoMenuItem[];
+
+  /** @see {@link ChartInfoMenu} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ChartInfoMenu | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ChartInfoMenu(client);
+    model.items = deList(ChartInfoMenuItem.deJson, raw['items'], client);
+    reportUnknown(client, 'ChartInfoMenu', raw, model);
+    return model;
+  }
+}
+
 /** A chart page (backed by a playlist of ranked tracks). */
 export class ChartInfo extends YandexMusicModel {
   /** Chart id. */
@@ -481,8 +534,8 @@ export class ChartInfo extends YandexMusicModel {
   typeForFrom?: string;
   /** Chart title. */
   title?: string;
-  /** Chart menu (raw JSON, pending a typed model). */
-  menu?: JSONValue;
+  /** Chart menu. */
+  menu?: ChartInfoMenu;
   /** The playlist backing the chart. */
   chart?: Playlist;
   /** Chart description. */
@@ -494,7 +547,8 @@ export class ChartInfo extends YandexMusicModel {
       return null;
     }
     const model = new ChartInfo(client);
-    assign(model, raw, ['id', 'type', 'typeForFrom', 'title', 'menu', 'chartDescription']);
+    assign(model, raw, ['id', 'type', 'typeForFrom', 'title', 'chartDescription']);
+    model.menu = ChartInfoMenu.deJson(raw['menu'], client) ?? undefined;
     model.chart = Playlist.deJson(raw['chart'], client) ?? undefined;
     reportUnknown(client, 'ChartInfo', raw, model);
     return model;

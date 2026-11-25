@@ -194,12 +194,82 @@ export class CollectionSync extends YandexMusicModel {
   }
 }
 
+/** A button inside an {@link Alert}. */
+export class AlertButton extends YandexMusicModel {
+  /** Button text. */
+  text?: string;
+  /** Background colour. */
+  bgColor?: string;
+  /** Text colour. */
+  textColor?: string;
+  /** Link the button leads to. */
+  uri?: string;
+
+  /** @see {@link AlertButton} */
+  static deJson(raw: JSONValue | undefined, client?: Client): AlertButton | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new AlertButton(client);
+    assign(model, raw, ['text', 'bgColor', 'textColor', 'uri']);
+    reportUnknown(client, 'AlertButton', raw, model);
+    return model;
+  }
+}
+
+/** A warning block (subscription ending, gifts) shown below the player bar. */
+export class Alert extends YandexMusicModel {
+  /** Unique id. */
+  alertId?: string;
+  /** Alert text. */
+  text?: string;
+  /** Background colour. */
+  bgColor?: string;
+  /** Text colour. */
+  textColor?: string;
+  /** Alert type. */
+  alertType?: string;
+  /** Link button. */
+  button?: AlertButton;
+  /** Whether a "Close" button is shown. */
+  closeButton?: boolean;
+
+  /** @see {@link Alert} */
+  static deJson(raw: JSONValue | undefined, client?: Client): Alert | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new Alert(client);
+    assign(model, raw, ['alertId', 'text', 'bgColor', 'textColor', 'alertType', 'closeButton']);
+    model.button = AlertButton.deJson(raw['button'], client) ?? undefined;
+    reportUnknown(client, 'Alert', raw, model);
+    return model;
+  }
+}
+
+/** Information about the personal station. */
+export class StationData extends YandexMusicModel {
+  /** Station name. */
+  name?: string;
+
+  /** @see {@link StationData} */
+  static deJson(raw: JSONValue | undefined, client?: Client): StationData | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new StationData(client);
+    assign(model, raw, ['name']);
+    reportUnknown(client, 'StationData', raw, model);
+    return model;
+  }
+}
+
 /**
  * Aggregated account status returned by `account/status`.
  *
  * @remarks
- * A few rarely-used sub-objects (`stationData`, `barBelow`) remain raw JSON; the
- * commonly-used `permissions`, `subscription` and `plus` are typed.
+ * `masterhub` remains raw JSON; `permissions`, `subscription`, `plus`,
+ * `stationData` and `barBelow` are typed.
  */
 export class Status extends YandexMusicModel {
   /** Account info. */
@@ -224,10 +294,10 @@ export class Status extends YandexMusicModel {
   skipsPerHour?: number;
   /** Whether a personal station exists. */
   stationExists?: boolean;
-  /** Station data (raw JSON, pending a typed model). */
-  stationData?: JSONValue;
-  /** Bar-below alert (raw JSON, pending a typed model). */
-  barBelow?: JSONValue;
+  /** Personal station data. */
+  stationData?: StationData;
+  /** Bar-below alert. */
+  barBelow?: Alert;
   /** Premium region. */
   premiumRegion?: number;
   /** Experiment bucket. */
@@ -255,8 +325,6 @@ export class Status extends YandexMusicModel {
       'defaultEmail',
       'skipsPerHour',
       'stationExists',
-      'stationData',
-      'barBelow',
       'premiumRegion',
       'experiment',
       'pretrialActive',
@@ -268,6 +336,8 @@ export class Status extends YandexMusicModel {
     model.permissions = Permissions.deJson(raw['permissions'], client) ?? undefined;
     model.subscription = Subscription.deJson(raw['subscription'], client) ?? undefined;
     model.plus = Plus.deJson(raw['plus'], client) ?? undefined;
+    model.stationData = StationData.deJson(raw['stationData'], client) ?? undefined;
+    model.barBelow = Alert.deJson(raw['barBelow'], client) ?? undefined;
     reportUnknown(client, 'Status', raw, model);
     return model;
   }

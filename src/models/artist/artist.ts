@@ -5,9 +5,46 @@
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { ContentRestrictions, Cover, CoverDerivedColors, ExtraAction, Link } from '../common.js';
+import { AlbumActionButton } from '../album/album.js';
 import { Track } from '../track/track.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
+
+/** Whether an artist has a trailer available. */
+export class ArtistTrailerStatus extends YandexMusicModel {
+  /** Whether a trailer is available. */
+  available?: boolean;
+
+  /** @see {@link ArtistTrailerStatus} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ArtistTrailerStatus | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ArtistTrailerStatus(client);
+    assign(model, raw, ['available']);
+    reportUnknown(client, 'ArtistTrailerStatus', raw, model);
+    return model;
+  }
+}
+
+/** Donation (support) link of an artist. */
+export class ArtistDonationInfo extends YandexMusicModel {
+  /** Donation title. */
+  title?: string;
+  /** Donation URL. */
+  url?: string;
+
+  /** @see {@link ArtistDonationInfo} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ArtistDonationInfo | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ArtistDonationInfo(client);
+    assign(model, raw, ['title', 'url']);
+    reportUnknown(client, 'ArtistDonationInfo', raw, model);
+    return model;
+  }
+}
 
 /** Aggregate counts of an artist's content. */
 export class Counts extends YandexMusicModel {
@@ -142,10 +179,16 @@ export class Artist extends YandexMusicModel {
   noPicturesFromSearch?: boolean;
   /** Like timestamp (ISO 8601), present in a likes context. */
   timestamp?: string;
-  /** Artist trailer descriptor (free-form raw JSON, pending a typed model). */
-  trailer?: JSONValue;
-  /** Donation/support info (free-form raw JSON, pending a typed model). */
-  donationInfo?: JSONValue;
+  /** Artist trailer availability. */
+  trailer?: ArtistTrailerStatus;
+  /** Donation/support info. */
+  donationInfo?: ArtistDonationInfo;
+  /** Call-to-action button. */
+  actionButton?: AlbumActionButton;
+  /** Full names (free-form raw JSON). */
+  fullNames?: JSONValue;
+  /** Aliases (free-form raw JSON). */
+  aliases?: JSONValue;
   /** Extra page actions (for example a donation button). */
   extraActions?: ExtraAction[];
   /** Decomposed name parts (names + separators; free-form raw JSON). */
@@ -188,9 +231,9 @@ export class Artist extends YandexMusicModel {
       'hasTrailer',
       'noPicturesFromSearch',
       'timestamp',
-      'trailer',
-      'donationInfo',
       'decomposed',
+      'fullNames',
+      'aliases',
     ]);
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
     model.counts = Counts.deJson(raw['counts'], client) ?? undefined;
@@ -202,6 +245,9 @@ export class Artist extends YandexMusicModel {
     model.cutoutCover = Cover.deJson(raw['cutoutCover'], client) ?? undefined;
     model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
     model.extraActions = deList(ExtraAction.deJson, raw['extraActions'], client);
+    model.trailer = ArtistTrailerStatus.deJson(raw['trailer'], client) ?? undefined;
+    model.donationInfo = ArtistDonationInfo.deJson(raw['donationInfo'], client) ?? undefined;
+    model.actionButton = AlbumActionButton.deJson(raw['actionButton'], client) ?? undefined;
     reportUnknown(client, 'Artist', raw, model);
     return model;
   }

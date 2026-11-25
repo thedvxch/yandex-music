@@ -20,7 +20,17 @@ group: Документация
   прокидывать почти не нужно.
 - **Типизированные ошибки.** Любая ошибка наследует `YandexMusicError`; сетевые
   дополнительно наследуют `NetworkError` (`BadRequestError`, `NotFoundError`,
-  `TimedOutError`, `UnauthorizedError`).
+  `TimedOutError`, `UnauthorizedError`, `TooManyRequestsError`, `ServerError`). Поля
+  ошибки: `status`, `code`, `retryAfterMs`.
+- **Баррели экспорта.** Публичная поверхность собирается в `src/index.ts` из
+  файлов `src/exports/*.ts` (по одному на область: `track`, `rotor`, `ynison`,
+  `methods-rotor` и т.д.). Новый публичный символ добавляется в соответствующий
+  баррель; удалять и переименовывать экспорты нельзя (это проверяет
+  `test/public-api.test.ts`).
+- **Единая точка запроса.** `Request.send(method, url, { params, json, form, headers,
+  retry, timeout })` — общий низкоуровневый метод: `null` в `headers` убирает заголовок,
+  `retry: true` включает ретраи для идемпотентного чтения через `POST`. `get`, `post`,
+  `postJson`, `put`, `delete` — тонкие обёртки над ним.
 - **Никогда не `JSON.stringify` модель** — она держит обратную ссылку на клиент
   (циклическая структура). Читайте поля напрямую.
 
@@ -56,3 +66,17 @@ const client = new Client({
 | `fetch` | свой `fetch` (прокси, моки, ретраи) |
 | `reportUnknownFields` | подсветить поля API, которые модели ещё не маппят |
 | `request` | полностью преднастроенный транспорт (перекрывает `userAgent`/`headers`/`fetch`) |
+| `onUnknownField` | хук вместо `console.warn`: получает `{ model, fields, raw, shapes }` |
+| `retries` / `retryBaseMs` / `retryMaxMs` | ретраи GET и пакетного чтения через POST (по умолчанию 2 / 300 / 4000 мс) |
+| `timeout` | таймаут запроса, мс (по умолчанию 5000) |
+
+## Дрейф API: `reportUnknown`
+
+Каждая модель после разбора вызывает `reportUnknown`: он сравнивает ключи ответа с
+теми, которые модель реально присвоила (`assign()` их запоминает), и сообщает
+остальные. Объявленные, но не присвоенные поля класса тоже считаются
+немаппленными. Хук `onUnknownField` (или `reportUnknownFields: true` с выводом в
+`console.warn`) получает отчёт `{ model, fields, raw, shapes }`; `shapes` описывает
+только тип значения каждого ключа (например `list[{id: int, title: str}]`, глубина до 3,
+строка до 500 символов), сами данные в отчёт не попадают. Ошибка в хуке не прерывает
+разбор ответа.

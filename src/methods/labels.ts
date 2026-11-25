@@ -27,8 +27,7 @@ export function LabelsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async label(labelId: string | number): Promise<Label | null> {
-      const result = await this.request.get(`${this.baseUrl}/labels/${labelId}`);
-      return Label.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/labels/${labelId}`, Label.deJson);
     }
 
     /**
@@ -49,12 +48,10 @@ export function LabelsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
       sortBy?: ArtistAlbumsSortBy,
       sortOrder?: SortOrder,
     ): Promise<LabelAlbums | null> {
-      const result = await this.request.get(`${this.baseUrl}/labels/${labelId}/albums`, {
-        page,
-        pageSize,
-        sortBy,
-        sortOrder,
-      });
+      const params: Record<string, string | number> = { page, pageSize };
+      if (sortBy !== undefined) params['sortBy'] = sortBy;
+      if (sortOrder !== undefined) params['sortOrder'] = sortOrder;
+      const result = await this.request.get(`${this.baseUrl}/labels/${labelId}/albums`, params);
       return LabelAlbums.deJson(result, this as unknown as Client);
     }
 

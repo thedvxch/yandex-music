@@ -6,9 +6,9 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { Cover, ExtraAction, Link } from '../common.js';
+import { ContentRestrictions, Cover, ExtraAction, Link } from '../common.js';
 import { Track } from '../track/track.js';
-import { Album } from '../album/album.js';
+import { Album, AlbumActionButton } from '../album/album.js';
 import { Video } from '../video.js';
 import { Clip } from '../clip.js';
 import { Playlist } from '../playlist/playlist.js';
@@ -17,7 +17,8 @@ import { CustomWave } from '../playlist/promo.js';
 import { Chart } from '../landing/landing.js';
 import { TrailerInfo } from '../trailerInfo.js';
 import { Pager } from '../pager.js';
-import { Artist } from './artist.js';
+import { SkeletonBlock } from '../skeleton.js';
+import { Artist, ArtistTrailerStatus } from './artist.js';
 import { Stats } from './stats.js';
 import { Vinyl } from './vinyl.js';
 import type { Client } from '../../client.js';
@@ -125,6 +126,41 @@ export class ArtistTrailer extends YandexMusicModel {
   }
 }
 
+/** An announced, not yet released album. */
+export class UpcomingAlbum extends YandexMusicModel {
+  /** Album id. */
+  id?: number;
+  /** Album title. */
+  title?: string;
+  /** Album kind. */
+  type?: string;
+  /** Release date (ISO 8601). */
+  releaseDate?: string;
+  /** Milliseconds until release. */
+  millisecondsUntilRelease?: number;
+  /** Cover URI template. */
+  coverUri?: string;
+  /** Whether the user pre-saved the release. */
+  presaved?: boolean;
+  /** Album artists. */
+  artists?: Artist[];
+  /** Content availability restrictions. */
+  contentRestrictions?: ContentRestrictions;
+
+  /** @see {@link UpcomingAlbum} */
+  static deJson(raw: JSONValue | undefined, client?: Client): UpcomingAlbum | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new UpcomingAlbum(client);
+    assign(model, raw, ['id', 'title', 'type', 'releaseDate', 'millisecondsUntilRelease', 'coverUri', 'presaved']);
+    model.artists = deList(Artist.deJson, raw['artists'], client);
+    model.contentRestrictions = ContentRestrictions.deJson(raw['contentRestrictions'], client) ?? undefined;
+    reportUnknown(client, 'UpcomingAlbum', raw, model);
+    return model;
+  }
+}
+
 /** A rich aggregate of everything shown on an artist's main page. */
 export class BriefInfo extends YandexMusicModel {
   /** The artist. */
@@ -171,6 +207,16 @@ export class BriefInfo extends YandexMusicModel {
   hasTrailer?: boolean;
   /** External links (official site, socials). */
   links?: Link[];
+  /** Call-to-action button. */
+  actionButton?: AlbumActionButton;
+  /** Background image URL. */
+  backgroundImageUrl?: string;
+  /** Background video id. */
+  backgroundVideoId?: string;
+  /** Background video URL. */
+  backgroundVideoUrl?: string;
+  /** The next announced release. */
+  upcomingAlbum?: UpcomingAlbum;
 
   /** @see {@link BriefInfo} */
   static deJson(raw: JSONValue | undefined, client?: Client): BriefInfo | null {
@@ -178,7 +224,7 @@ export class BriefInfo extends YandexMusicModel {
       return null;
     }
     const model = new BriefInfo(client);
-    assign(model, raw, ['lastReleaseIds', 'concerts', 'hasPromotions', 'bandlinkScannerLink', 'hasTrailer']);
+    assign(model, raw, ['lastReleaseIds', 'concerts', 'hasPromotions', 'bandlinkScannerLink', 'hasTrailer', 'backgroundImageUrl', 'backgroundVideoId', 'backgroundVideoUrl']);
     model.extraActions = deList(ExtraAction.deJson, raw['extraActions'], client);
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.albums = deList(Album.deJson, raw['albums'], client);
@@ -196,6 +242,8 @@ export class BriefInfo extends YandexMusicModel {
     model.stats = Stats.deJson(raw['stats'], client) ?? undefined;
     model.customWave = CustomWave.deJson(raw['customWave'], client) ?? undefined;
     model.links = raw['links'] ? deList(Link.deJson, raw['links'], client) : undefined;
+    model.actionButton = AlbumActionButton.deJson(raw['actionButton'], client) ?? undefined;
+    model.upcomingAlbum = UpcomingAlbum.deJson(raw['upcomingAlbum'], client) ?? undefined;
     reportUnknown(client, 'BriefInfo', raw, model);
     return model;
   }
@@ -286,8 +334,8 @@ export class ArtistInfo extends YandexMusicModel {
   likesCount?: number;
   /** Listening statistics. */
   stats?: Stats;
-  /** Trailer availability (free-form raw JSON). */
-  trailer?: JSONValue;
+  /** Trailer availability. */
+  trailer?: ArtistTrailerStatus;
   /** Donation info (free-form raw JSON). */
   donation?: JSONValue;
   /** All available covers. */
@@ -303,9 +351,10 @@ export class ArtistInfo extends YandexMusicModel {
       return null;
     }
     const model = new ArtistInfo(client);
-    assign(model, raw, ['likesCount', 'trailer', 'donation', 'description', 'artistType']);
+    assign(model, raw, ['likesCount', 'donation', 'description', 'artistType']);
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.stats = Stats.deJson(raw['stats'], client) ?? undefined;
+    model.trailer = ArtistTrailerStatus.deJson(raw['trailer'], client) ?? undefined;
     model.covers = deList(Cover.deJson, raw['covers'], client);
     reportUnknown(client, 'ArtistInfo', raw, model);
     return model;
@@ -412,8 +461,8 @@ export class ArtistSkeleton extends YandexMusicModel {
   id?: string;
   /** Skeleton title. */
   title?: string;
-  /** Page blocks (free-form raw JSON, pending typed variants). */
-  blocks?: JSONValue[];
+  /** Page blocks. */
+  blocks?: SkeletonBlock[];
 
   /** @see {@link ArtistSkeleton} */
   static deJson(raw: JSONValue | undefined, client?: Client): ArtistSkeleton | null {
@@ -422,7 +471,7 @@ export class ArtistSkeleton extends YandexMusicModel {
     }
     const model = new ArtistSkeleton(client);
     assign(model, raw, ['id', 'title']);
-    model.blocks = Array.isArray(raw['blocks']) ? (raw['blocks'] as JSONValue[]) : undefined;
+    model.blocks = Array.isArray(raw['blocks']) ? deList(SkeletonBlock.deJson, raw['blocks'], client) : undefined;
     reportUnknown(client, 'ArtistSkeleton', raw, model);
     return model;
   }

@@ -80,6 +80,11 @@ export interface UnknownFieldsReport {
   fields: string[];
   /** The raw JSON object the model was built from, for inspection. */
   raw: JSONObject;
+  /**
+   * Type-only shape of each unknown field's value (no data), for example
+   * `list[{id: int, title: str}]`. Depth is capped at 3 and each string at 500 chars.
+   */
+  shapes?: Record<string, string>;
 }
 
 /**
@@ -89,16 +94,96 @@ export interface UnknownFieldsReport {
  */
 export type UnknownFieldReporter = (report: UnknownFieldsReport) => void;
 
+const SHAPE_MAX_DEPTH = 3;
+const SHAPE_MAX_LENGTH = 500;
+const ID_SEGMENT = /^[\d:_-]*\d[\d:_-]*$|^[0-9a-fA-F-]{16,}$/;
+
+function describeValue(value: JSONValue | undefined, depth: number): string {
+  if (value === null || value === undefined) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return 'list[]';
+    }
+    if (depth >= SHAPE_MAX_DEPTH) {
+      return 'list[...]';
+    }
+    const dicts: JSONObject[] = [];
+    const variants = new Set<string>();
+    for (const item of value) {
+      if (isJsonObject(item)) {
+        dicts.push(item);
+      } else {
+        variants.add(describeValue(item, depth + 1));
+      }
+    }
+    if (dicts.length > 0) {
+      variants.add(describeDicts(dicts, depth + 1));
+    }
+    return `list[${[...variants].sort().join(' | ')}]`;
+  }
+  if (typeof value === 'object') {
+    return describeDicts([value], depth);
+  }
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? 'int' : 'float';
+  }
+  if (typeof value === 'boolean') {
+    return 'bool';
+  }
+  return 'str';
+}
+
+function describeDicts(dicts: JSONObject[], depth: number): string {
+  if (depth >= SHAPE_MAX_DEPTH) {
+    return '{...}';
+  }
+  const keys = new Map<string, Set<string>>();
+  for (const dict of dicts) {
+    for (const [key, value] of Object.entries(dict)) {
+      const name = ID_SEGMENT.test(key) ? '{id}' : key;
+      let types = keys.get(name);
+      if (!types) {
+        types = new Set();
+        keys.set(name, types);
+      }
+      types.add(describeValue(value, depth + 1));
+    }
+  }
+  return `{${[...keys].map(([name, types]) => `${name}: ${[...types].sort().join(' | ')}`).join(', ')}}`;
+}
+
+/**
+ * Describe the structure of a JSON value without its data: types instead of
+ * values, id-like keys collapsed to `{id}`, list items merged. For example
+ * `list[{id: int, title: str}]`.
+ *
+ * @internal Exported for tests.
+ * @param value - The JSON value to describe.
+ * @param depth - Nesting depth after which objects/lists are elided (default 3).
+ * @returns The shape string, at most 500 characters.
+ */
+export function describeShape(value: JSONValue | undefined, depth = SHAPE_MAX_DEPTH): string {
+  const shape = describeValue(value, SHAPE_MAX_DEPTH - depth);
+  return shape.length <= SHAPE_MAX_LENGTH ? shape : `${shape.slice(0, SHAPE_MAX_LENGTH - 1)}…`;
+}
+
+/** Keys each model instance was asked to copy by {@link assign}. */
+const assignedKeys = new WeakMap<object, Set<string>>();
+
 /**
  * Detect API keys the finished model did not map and report them — to the
  * client's `onUnknownField` hook when set, otherwise to `console.warn` when
  * `reportUnknownFields` is enabled.
  *
  * Called at the end of a `deJson` once every field (scalar and nested) is
- * assigned: any raw key without a matching own-property on the model is unmapped.
- * This relies on the library's verbatim camelCase mapping (model field names
- * equal API keys), which holds throughout. Detection is off unless one of the
- * two options is set, so it is safe to leave wired into every model.
+ * assigned. A raw key is known when {@link assign} was asked to copy it, when
+ * the model holds an own property of that name with a defined value, when the
+ * model has an own (possibly undefined) property for a `null` raw value, or
+ * when it is listed in `alsoKnown`. `client` is never known. A declared field
+ * the model never maps is therefore reported. Detection is off unless one of
+ * the two options is set, so it is safe to leave wired into every model.
  *
  * @param client - The owning client (carries `reportUnknownFields`/`onUnknownField`).
  * @param label - Model name, used in the report.
@@ -117,19 +202,31 @@ export function reportUnknown(
   if (!client || (!client.reportUnknownFields && !client.onUnknownField)) {
     return;
   }
-  const known = new Set(Object.keys(model));
-  if (alsoKnown) {
-    for (const key of alsoKnown) {
-      known.add(key);
+  const assigned = assignedKeys.get(model);
+  const extra = alsoKnown ? new Set(alsoKnown) : undefined;
+  const fields = model as Record<string, unknown>;
+  const unknown = Object.keys(raw).filter((key) => {
+    if (key === 'client') {
+      return true;
     }
-  }
-  const unknown = Object.keys(raw).filter((key) => !known.has(key));
+    if (assigned?.has(key) || extra?.has(key)) {
+      return false;
+    }
+    if (!Object.hasOwn(fields, key)) {
+      return true;
+    }
+    return fields[key] === undefined && raw[key] !== null;
+  });
   if (unknown.length === 0) {
     return;
   }
   if (client.onUnknownField) {
+    const shapes: Record<string, string> = {};
+    for (const key of unknown) {
+      shapes[key] = describeShape(raw[key]);
+    }
     try {
-      client.onUnknownField({ model: label, fields: unknown, raw });
+      client.onUnknownField({ model: label, fields: unknown, raw, shapes });
     } catch {
       // hook errors must not abort model deserialization.
     }
@@ -152,7 +249,13 @@ export function reportUnknown(
  * @param keys - The field names to copy when present in `raw`.
  */
 export function assign<T extends object>(target: T, raw: JSONObject, keys: readonly (keyof T & string)[]): void {
+  let recorded = assignedKeys.get(target);
+  if (!recorded) {
+    recorded = new Set();
+    assignedKeys.set(target, recorded);
+  }
   for (const key of keys) {
+    recorded.add(key);
     const value = raw[key];
     if (value !== undefined) {
       (target as Record<string, JSONValue>)[key] = value;

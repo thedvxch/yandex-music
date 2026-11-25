@@ -9,7 +9,11 @@
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Icon } from '../common.js';
+import { Wave } from '../wave.js';
 import { Track } from '../track/track.js';
+import { Fade } from '../track/nested.js';
+import { CombinedSessionItem } from './session.js';
+import { RotorSeed, readSeed, readSeedList } from './seed.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -197,6 +201,18 @@ export class Station extends YandexMusicModel {
   mtsFullImageUrl?: string;
   /** Parent station id. */
   parentId?: Id;
+  /** Whether the station is a special wave context. */
+  specialContext?: boolean;
+  /** Number of listeners of a personal station. */
+  listeners?: number;
+  /** Login of the station owner. */
+  login?: string;
+  /** Full name of the station owner. */
+  fullName?: string;
+  /** Display name of the station owner. */
+  displayName?: string;
+  /** Station visibility. */
+  visibility?: string;
 
   /** @see {@link Station} */
   static deJson(raw: JSONValue | undefined, client?: Client): Station | null {
@@ -204,7 +220,18 @@ export class Station extends YandexMusicModel {
       return null;
     }
     const model = new Station(client);
-    assign(model, raw, ['name', 'idForFrom', 'fullImageUrl', 'mtsFullImageUrl']);
+    assign(model, raw, [
+      'name',
+      'idForFrom',
+      'fullImageUrl',
+      'mtsFullImageUrl',
+      'specialContext',
+      'listeners',
+      'login',
+      'fullName',
+      'displayName',
+      'visibility',
+    ]);
     model.restrictions = Restrictions.deJson(raw['restrictions'], client) ?? undefined;
     model.restrictions2 = Restrictions.deJson(raw['restrictions2'], client) ?? undefined;
     model.id = Id.deJson(raw['id'], client) ?? undefined;
@@ -255,8 +282,8 @@ export class StationResult extends YandexMusicModel {
   adParams?: AdParams;
   /** Explanation text. */
   explanation?: string;
-  /** Prerolls (free-form raw JSON, ad payload). */
-  prerolls?: JSONValue;
+  /** Prerolls (ad payload ids). */
+  prerolls?: string[];
   /** "Rup" title. */
   rupTitle?: string;
   /** "Rup" description. */
@@ -302,7 +329,6 @@ export class Dashboard extends YandexMusicModel {
   }
 }
 
-/** One track in a station's playback sequence. */
 /** Acoustic parameters of a track within a radio sequence. */
 export class TrackParameters extends YandexMusicModel {
   /** Beats per minute. */
@@ -311,6 +337,10 @@ export class TrackParameters extends YandexMusicModel {
   hue?: number;
   /** Energy level. */
   energy?: number;
+  /** Hue of the user's collection. */
+  userCollectionHue?: number;
+  /** Fade timing used when mixing this track into the next. */
+  mixFade?: Fade;
 
   /** @see {@link TrackParameters} */
   static deJson(raw: JSONValue | undefined, client?: Client): TrackParameters | null {
@@ -318,12 +348,14 @@ export class TrackParameters extends YandexMusicModel {
       return null;
     }
     const model = new TrackParameters(client);
-    assign(model, raw, ['bpm', 'hue', 'energy']);
+    assign(model, raw, ['bpm', 'hue', 'energy', 'userCollectionHue']);
+    model.mixFade = Fade.deJson(raw['mixFade'], client) ?? undefined;
     reportUnknown(client, 'TrackParameters', raw, model);
     return model;
   }
 }
 
+/** One track in a station's playback sequence. */
 export class Sequence extends YandexMusicModel {
   /** Sequence item type, for example `track`. */
   type?: string;
@@ -394,12 +426,32 @@ export class WaveSettingRestrictions extends YandexMusicModel {
   }
 }
 
+/** A block of wave settings (for example the `contexts` block listing activity stations). */
+export class WaveSettingsBlock extends YandexMusicModel {
+  /** Block type, for example `contexts`. */
+  type?: string;
+  /** The block's stations. */
+  items?: Station[];
+
+  /** @see {@link WaveSettingsBlock} */
+  static deJson(raw: JSONValue | undefined, client?: Client): WaveSettingsBlock | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new WaveSettingsBlock(client);
+    assign(model, raw, ['type']);
+    model.items = deList(Station.deJson, raw['items'], client);
+    reportUnknown(client, 'WaveSettingsBlock', raw, model);
+    return model;
+  }
+}
+
 /** Settings and personalization options for the "My Wave" station (`rotor/wave/settings`). */
 export class WaveSettings extends YandexMusicModel {
   /** The default station to start when the user opens "My Wave". */
   defaultStation?: WaveDefaultStation;
-  /** Landing blocks shown above the settings (raw JSON, pending a typed model). */
-  blocks?: JSONValue;
+  /** Landing blocks shown above the settings. */
+  blocks?: WaveSettingsBlock[];
   /** The available personalization restrictions. */
   settingRestrictions?: WaveSettingRestrictions;
 
@@ -409,7 +461,7 @@ export class WaveSettings extends YandexMusicModel {
       return null;
     }
     const model = new WaveSettings(client);
-    assign(model, raw, ['blocks']);
+    model.blocks = Array.isArray(raw['blocks']) ? deList(WaveSettingsBlock.deJson, raw['blocks'], client) : undefined;
     model.defaultStation = WaveDefaultStation.deJson(raw['defaultStation'], client) ?? undefined;
     model.settingRestrictions = WaveSettingRestrictions.deJson(raw['settingRestrictions'], client) ?? undefined;
     reportUnknown(client, 'WaveSettings', raw, model);
@@ -472,6 +524,22 @@ export class RotorSession extends YandexMusicModel {
   terminated?: boolean;
   /** The wave the session is playing. */
   wave?: WaveInfo;
+  /** Radio session id (same value as {@link RotorSession.id}). */
+  radioSessionId?: string;
+  /** Batch id (echoed back when requesting the next batch). */
+  batchId?: string;
+  /** Whether the Halloween ("pumpkin") theme is active. */
+  pumpkin?: boolean;
+  /** The first track batch. */
+  sequence?: Sequence[];
+  /** Offline recommender data. */
+  offlineRecommenderData?: number[];
+  /** Whether the session is interactive. */
+  interactive?: boolean;
+  /** Typed accepted seeds (parsed from {@link RotorSession.acceptedSeeds} when they are strings). */
+  acceptedRotorSeeds?: RotorSeed[];
+  /** Typed description seed (parsed from {@link RotorSession.descriptionSeed} when it is a string). */
+  descriptionRotorSeed?: RotorSeed;
 
   /** @see {@link RotorSession} */
   static deJson(raw: JSONValue | undefined, client?: Client): RotorSession | null {
@@ -481,17 +549,34 @@ export class RotorSession extends YandexMusicModel {
     const model = new RotorSession(client);
     assign(model, raw, [
       'id',
-      'acceptedSeeds',
       'originalSeeds',
       'allowExplicit',
       'child',
       'createdAt',
       'lastAccess',
-      'descriptionSeed',
       'incognito',
       'sessionType',
       'terminated',
+      'radioSessionId',
+      'batchId',
+      'pumpkin',
+      'offlineRecommenderData',
+      'interactive',
     ]);
+    // Seeds arrive either as `type:tag` strings or as `{type, tag, value}` objects; expose both forms.
+    const accepted = readSeedList(raw['acceptedSeeds'], client);
+    if (accepted) {
+      model.acceptedSeeds = accepted.strings;
+      model.acceptedRotorSeeds = accepted.seeds;
+    }
+    const description = readSeed(raw['descriptionSeed'], client);
+    if (description) {
+      model.descriptionSeed = description.text;
+      model.descriptionRotorSeed = description.seed;
+    }
+    model.id ??= model.radioSessionId;
+    model.radioSessionId ??= model.id;
+    model.sequence = Array.isArray(raw['sequence']) ? deList(Sequence.deJson, raw['sequence'], client) : undefined;
     model.wave = WaveInfo.deJson(raw['wave'], client) ?? undefined;
     reportUnknown(client, 'RotorSession', raw, model);
     return model;
@@ -506,8 +591,8 @@ export class CombinedSession extends YandexMusicModel {
   batchId?: string;
   /** Whether the Halloween ("pumpkin") theme is active. */
   pumpkin?: boolean;
-  /** The track batch (raw JSON, pending a typed model). */
-  list?: JSONValue;
+  /** The track and clip batch. */
+  list?: CombinedSessionItem[];
 
   /** @see {@link CombinedSession} */
   static deJson(raw: JSONValue | undefined, client?: Client): CombinedSession | null {
@@ -515,7 +600,8 @@ export class CombinedSession extends YandexMusicModel {
       return null;
     }
     const model = new CombinedSession(client);
-    assign(model, raw, ['sessionId', 'batchId', 'pumpkin', 'list']);
+    assign(model, raw, ['sessionId', 'batchId', 'pumpkin']);
+    model.list = Array.isArray(raw['list']) ? deList(CombinedSessionItem.deJson, raw['list'], client) : undefined;
     reportUnknown(client, 'CombinedSession', raw, model);
     return model;
   }
@@ -552,6 +638,18 @@ export class ClonedSession extends YandexMusicModel {
   descriptionSeed?: JSONValue;
   /** The first track batch. */
   sequence?: Sequence[];
+  /** Whether the session has been terminated. */
+  terminated?: boolean;
+  /** The wave the session is playing. */
+  wave?: Wave;
+  /** Offline recommender data. */
+  offlineRecommenderData?: number[];
+  /** Whether the session is interactive. */
+  interactive?: boolean;
+  /** Typed accepted seeds. */
+  acceptedRotorSeeds?: RotorSeed[];
+  /** Typed description seed. */
+  descriptionRotorSeed?: RotorSeed;
 
   /** @see {@link ClonedSession} */
   static deJson(raw: JSONValue | undefined, client?: Client): ClonedSession | null {
@@ -559,8 +657,20 @@ export class ClonedSession extends YandexMusicModel {
       return null;
     }
     const model = new ClonedSession(client);
-    assign(model, raw, ['radioSessionId', 'batchId', 'pumpkin', 'acceptedSeeds', 'descriptionSeed']);
+    assign(model, raw, [
+      'radioSessionId',
+      'batchId',
+      'pumpkin',
+      'acceptedSeeds',
+      'descriptionSeed',
+      'terminated',
+      'offlineRecommenderData',
+      'interactive',
+    ]);
+    model.acceptedRotorSeeds = readSeedList(raw['acceptedSeeds'], client)?.seeds;
+    model.descriptionRotorSeed = readSeed(raw['descriptionSeed'], client)?.seed;
     model.sequence = deList(Sequence.deJson, raw['sequence'], client);
+    model.wave = Wave.deJson(raw['wave'], client) ?? undefined;
     reportUnknown(client, 'ClonedSession', raw, model);
     return model;
   }
@@ -589,6 +699,36 @@ export class StationTracksResult extends YandexMusicModel {
     model.id = Id.deJson(raw['id'], client) ?? undefined;
     model.sequence = deList(Sequence.deJson, raw['sequence'], client);
     reportUnknown(client, 'StationTracksResult', raw, model);
+    return model;
+  }
+}
+
+/** A batch of tracks from a rotor session (`rotor/session/{id}/tracks`). */
+export class RotorSessionTracks extends StationTracksResult {
+  /** Whether the session has been terminated. */
+  terminated?: boolean;
+  /** Whether the server does not know the session. */
+  unknownSession?: boolean;
+  /** Offline recommender data. */
+  offlineRecommenderData?: number[];
+
+  /** @see {@link RotorSessionTracks} */
+  static override deJson(raw: JSONValue | undefined, client?: Client): RotorSessionTracks | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new RotorSessionTracks(client);
+    assign(model, raw, [
+      'batchId',
+      'pumpkin',
+      'radioSessionId',
+      'terminated',
+      'unknownSession',
+      'offlineRecommenderData',
+    ]);
+    model.id = Id.deJson(raw['id'], client) ?? undefined;
+    model.sequence = deList(Sequence.deJson, raw['sequence'], client);
+    reportUnknown(client, 'RotorSessionTracks', raw, model);
     return model;
   }
 }

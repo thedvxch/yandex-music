@@ -31,6 +31,8 @@ for (const item of sequence?.sequence?.slice(0, 5) ?? []) {
 }
 
 // Report "track started" so the station keeps the stream personalized.
+// The event timestamp defaults to now as an ISO string; pass your own ISO string
+// (or a Unix time in ms) as the last argument to override it.
 const first = sequence?.sequence?.[0]?.track?.id;
 if (first !== undefined && sequence?.batchId) {
   try {

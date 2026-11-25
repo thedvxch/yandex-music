@@ -31,7 +31,7 @@ export function PresavesMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       includeUpcoming = true,
       userId?: string | number,
     ): Promise<Presaves | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/presaves`, {
         includeReleased: String(includeReleased),
         includeUpcoming: String(includeUpcoming),
@@ -53,7 +53,7 @@ export function PresavesMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       likeAfterRelease = true,
       userId?: string | number,
     ): Promise<boolean> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.post(`${this.baseUrl}/users/${uid}/presaves/add`, {
         albumId,
         likeAfterRelease: String(likeAfterRelease),
@@ -70,7 +70,7 @@ export function PresavesMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersPresavesRemove(albumId: string | number, userId?: string | number): Promise<boolean> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.post(`${this.baseUrl}/users/${uid}/presaves/remove`, { albumId });
       return result === 'ok';
     }

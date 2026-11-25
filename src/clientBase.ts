@@ -9,6 +9,7 @@
  */
 import { deList, type UnknownFieldReporter } from './base.js';
 import { Request, type FetchLike } from './request.js';
+import { IdMissingError } from './exceptions.js';
 import type { Client } from './client.js';
 import type { Status } from './models/account/account.js';
 import type { DeJson, JSONValue } from './types.js';
@@ -61,6 +62,8 @@ export interface ClientOptions {
   retryBaseMs?: number;
   /** Maximum retry backoff in ms. Defaults to `4000`. Ignored when `request` is supplied. */
   retryMaxMs?: number;
+  /** Default per-request timeout in ms. Defaults to `5000`. Ignored when `request` is supplied. */
+  timeout?: number;
 }
 
 /** Object types addressable through the batch "list" endpoints. */
@@ -70,8 +73,13 @@ export type BatchObjectType = 'track' | 'album' | 'artist' | 'playlist';
  * Carrier of configuration and transport shared by all method groups.
  */
 export abstract class ClientBase {
-  /** OAuth token used to authenticate requests, if any. */
-  token?: string;
+  /**
+   * OAuth token used to authenticate requests, if any. Setting it updates the
+   * `Authorization` header (clearing it removes the header). Implemented as an
+   * accessor installed in the constructor, because a declared accessor inside
+   * the mixin base breaks `.d.ts` bundling.
+   */
+  declare token: string | undefined;
   /** API origin used to build request URLs. */
   baseUrl: string;
   /** Response language code. */
@@ -93,7 +101,21 @@ export abstract class ClientBase {
    * @param options - Client configuration.
    */
   constructor(options: ClientOptions = {}) {
-    this.token = options.token;
+    // The accessor writes the backing value only; `setClient` below attaches the header.
+    let currentToken = options.token;
+    Object.defineProperty(this, 'token', {
+      enumerable: true,
+      configurable: true,
+      get: (): string | undefined => currentToken,
+      set: (value: string | undefined): void => {
+        currentToken = value;
+        if (value) {
+          this.request.setAuthorization(value);
+        } else {
+          this.request.clearAuthorization();
+        }
+      },
+    });
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.language = options.language ?? 'ru';
     this.device = options.device ?? DEFAULT_DEVICE;
@@ -112,9 +134,24 @@ export abstract class ClientBase {
         retries: options.retries,
         retryBaseMs: options.retryBaseMs,
         retryMaxMs: options.retryMaxMs,
+        timeout: options.timeout,
       });
     }
     this.request.setLanguage(this.language);
+  }
+
+  /**
+   * Resolve a user id, falling back to the account uid set by {@link Client.init}.
+   *
+   * @internal Used by method mixins; not part of the public API.
+   * @throws {IdMissingError} When neither is available.
+   */
+  resolveUid(userId?: string | number): string | number {
+    const uid = userId ?? this.accountUid;
+    if (uid === undefined) {
+      throw new IdMissingError('userId not given and client.init() not called');
+    }
+    return uid;
   }
 
   /**
@@ -140,7 +177,7 @@ export abstract class ClientBase {
       [`${objectType}-ids`]: ids,
     };
     const url = `${this.baseUrl}/${objectType}s${objectType === 'playlist' ? '/list' : ''}`;
-    const result = await this.request.post(url, body);
+    const result = await this.request.send('POST', url, { form: body, retry: true });
     return deList(deJson, result as JSONValue, this as unknown as Client);
   }
 

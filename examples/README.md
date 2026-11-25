@@ -40,5 +40,8 @@ YM_TOKEN=... npx tsx examples/12-custom-fetch.ts      # needs: npm install node-
 | `10-download-quality.ts`  | quality/codec selection incl. lossless (FLAC) |
 | `11-artist.ts`            | artist brief info, tracks, discography, similar |
 | `12-custom-fetch.ts`      | inject a custom `fetch` (node-wreq browser TLS impersonation) |
+| `13-wave-session.ts`       | "My Wave" session loop: new session, track batches, feedback |
+| `14-ynison-remote.ts`      | control a playing device (pause, resume, next) over Ynison |
+| `15-file-info.ts`          | `tracksFileInfo` download (lossless, hq fallback) |
 
 All examples are run against the live API as part of release verification.

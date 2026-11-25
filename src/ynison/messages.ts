@@ -8,7 +8,11 @@
  *
  * @packageDocumentation
  */
-import { randomUUID, randomBytes } from 'node:crypto';
+import { createHash, randomUUID, randomBytes } from 'node:crypto';
+import { YnisonError } from '../exceptions.js';
+import type { YnisonState } from './client.js';
+import { YnisonQueueBoundaryError } from './errors.js';
+import { getCurrentProgressMs, getNeighbourIndex } from './utils.js';
 
 /**
  * Device identity override for the full-state request.
@@ -33,6 +37,18 @@ export interface DeviceInfoOverride {
 /** Generate a random device id (8 cryptographically-random bytes as hex). */
 export function generateDeviceId(): string {
   return randomBytes(8).toString('hex');
+}
+
+/**
+ * Derive a stable device id from a token: the first 12 hex chars of
+ * `sha256('yandex-music-ynison:' + token)`.
+ *
+ * @remarks
+ * Two watchers using the same derived id on one token displace each other
+ * (server code `400090001`), which is why {@link generateDeviceId} stays the default.
+ */
+export function deviceIdFromToken(token: string): string {
+  return createHash('sha256').update(`yandex-music-ynison:${token}`).digest('hex').slice(0, 12);
 }
 
 /** Generate a request id (a UUID v4). */
@@ -113,3 +129,141 @@ export const ANDROID_DEVICE_INFO: DeviceInfoOverride = {
   appVersion: '2026.05.3',
   title: 'yandex-music',
 };
+
+/** Optional overrides that make command builders deterministic (tests). */
+export interface CommandBuildOptions {
+  /** Current time in ms. Defaults to `Date.now()`. */
+  nowMs?: number;
+  /** Request id. Defaults to a fresh UUID. */
+  rid?: string;
+  /** Version counter (an int64 as a string). Defaults to a random 18-digit number. */
+  version?: string;
+}
+
+/** A command frame: a `PutYnisonStateRequest` body in betterproto JSON. */
+export type YnisonCommandRequest = Record<string, unknown> & {
+  rid: string;
+  playerActionTimestampMs: string;
+  activityInterceptionType: 'DO_NOT_INTERCEPT_BY_DEFAULT';
+};
+
+function newVersion(deviceId: string, opts: CommandBuildOptions): { deviceId: string; version: string; timestampMs: string } {
+  return {
+    deviceId,
+    version: opts.version ?? String(Math.floor(Math.random() * 1e18)),
+    timestampMs: String(opts.nowMs ?? Date.now()),
+  };
+}
+
+function wrapRequest(body: Record<string, unknown>, opts: CommandBuildOptions): YnisonCommandRequest {
+  return {
+    ...body,
+    rid: opts.rid ?? generateRequestId(),
+    playerActionTimestampMs: String(opts.nowMs ?? Date.now()),
+    activityInterceptionType: 'DO_NOT_INTERCEPT_BY_DEFAULT',
+  };
+}
+
+function snakeToCamel(key: string): string {
+  return key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+}
+
+/** Deep-convert object keys from snake_case to camelCase (the wire format used here). */
+function camelizeKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(camelizeKeys);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [snakeToCamel(k), camelizeKeys(v)]));
+  }
+  return value;
+}
+
+/**
+ * Build the `updatePlayingStatus` request that pauses or resumes playback.
+ * The position is recomputed to `nowMs` and the duration is kept.
+ */
+export function buildSetPausedRequest(
+  deviceId: string,
+  state: YnisonState,
+  paused: boolean,
+  opts: CommandBuildOptions = {},
+): YnisonCommandRequest {
+  return wrapRequest(
+    {
+      updatePlayingStatus: {
+        playingStatus: {
+          progressMs: String(getCurrentProgressMs(state, opts.nowMs)),
+          durationMs: String(state.durationMs),
+          paused,
+          playbackSpeed: state.playbackSpeed !== 0 ? state.playbackSpeed : 1,
+          version: newVersion(deviceId, opts),
+        },
+      },
+    },
+    opts,
+  );
+}
+
+/**
+ * Build the `updatePlayerState` request that moves `delta` tracks in playback
+ * order. The queue is cloned with a new `currentPlayableIndex`; progress and
+ * duration reset to 0 and the pause flag is kept.
+ *
+ * @throws {YnisonQueueBoundaryError} When the move leaves the queue.
+ * @throws {YnisonError} When the state carries no raw queue.
+ */
+export function buildChangeTrackRequest(
+  deviceId: string,
+  state: YnisonState,
+  delta: number,
+  opts: CommandBuildOptions = {},
+): YnisonCommandRequest {
+  const newIndex = getNeighbourIndex(state, delta);
+  if (newIndex === null) {
+    throw new YnisonQueueBoundaryError(
+      `cannot move ${delta > 0 ? '+' : ''}${delta} from track ${state.currentPlayableIndex} in a queue of ${state.playableList.length}`,
+    );
+  }
+  const playerState = asRecord(state.raw?.['player_state'] ?? state.raw?.['playerState']);
+  const rawQueue = asRecord(playerState?.['player_queue'] ?? playerState?.['playerQueue']);
+  if (!rawQueue) throw new YnisonError('state frame has no player queue to clone');
+  const queue = camelizeKeys(rawQueue) as Record<string, unknown>;
+  return wrapRequest(
+    {
+      updatePlayerState: {
+        playerState: {
+          playerQueue: { ...queue, currentPlayableIndex: newIndex, version: newVersion(deviceId, opts) },
+          status: {
+            progressMs: '0',
+            durationMs: '0',
+            paused: state.paused,
+            playbackSpeed: state.playbackSpeed !== 0 ? state.playbackSpeed : 1,
+            version: newVersion(deviceId, opts),
+          },
+        },
+      },
+    },
+    opts,
+  );
+}
+
+/** Build the `updateVolumeInfo` request; `volume` is clamped to `0..1`. */
+export function buildSetVolumeRequest(
+  deviceId: string,
+  targetDeviceId: string,
+  volume: number,
+  opts: CommandBuildOptions = {},
+): YnisonCommandRequest {
+  return wrapRequest(
+    {
+      updateVolumeInfo: {
+        deviceId: targetDeviceId,
+        volumeInfo: { volume: Math.max(0, Math.min(1, volume)), version: newVersion(deviceId, opts) },
+      },
+    },
+    opts,
+  );
+}
+
+function asRecord(v: unknown): Record<string, unknown> | undefined {
+  return v && typeof v === 'object' ? (v as Record<string, unknown>) : undefined;
+}

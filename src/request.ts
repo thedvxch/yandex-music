@@ -21,7 +21,9 @@ import {
   NetworkError,
   NotFoundError,
   PayloadTooLargeError,
+  ServerError,
   TimedOutError,
+  TooManyRequestsError,
   UnauthorizedError,
   YandexMusicError,
 } from './exceptions.js';
@@ -73,6 +75,33 @@ export interface ResponseLike {
    * buffering via {@link ResponseLike.arrayBuffer}.
    */
   body?: ReadableStream<Uint8Array> | null;
+  /** Response headers, when the fetch implementation exposes them (the global `fetch` does). */
+  headers?: { get(name: string): string | null } | Record<string, string | undefined>;
+}
+
+/** A JSON request body: {@link JSONValue} whose object properties may be `undefined` (dropped on serialization). */
+export type JsonInput = JSONValue | undefined | { [k: string]: JsonInput } | JsonInput[];
+
+/** Options for {@link Request.send}. */
+export interface SendOptions {
+  /** Query-string parameters. */
+  params?: Params;
+  /** Form-encoded body (an object) or a pre-encoded JSON string. Ignored when `json` is set. */
+  form?: Params | string;
+  /** JSON body. */
+  json?: JsonInput;
+  /** Extra headers for this request; a `null` value removes that header. */
+  headers?: Record<string, string | null>;
+  /** Per-call timeout override (milliseconds). */
+  timeout?: number;
+  /** Retry transient failures even for a non-`GET` method (idempotent reads over `POST`). */
+  retry?: boolean;
+}
+
+interface BodyInit {
+  body: string;
+  form?: boolean;
+  json?: boolean;
 }
 
 /**
@@ -91,7 +120,10 @@ export interface RequestInit {
   client?: Client;
   /** Starting headers. Defaults to a copy of {@link BASE_HEADERS}. */
   headers?: Record<string, string>;
-  /** Optional proxy URL applied to every request. */
+  /**
+   * Optional proxy URL applied to every request.
+   * @deprecated Ignored. Pass a proxy-capable `fetch` (undici `ProxyAgent` / `node-wreq`) instead.
+   */
   proxyUrl?: string;
   /** Default timeout in milliseconds. Defaults to {@link DEFAULT_TIMEOUT_MS}. */
   timeout?: number;
@@ -119,6 +151,32 @@ interface Envelope {
 class RaceFailed extends Error {}
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Read a response header without ever throwing: custom fetch shims may expose
+ * `headers` as a plain object, a `Headers`-like without `get`, or nothing.
+ */
+function readHeader(headers: unknown, name: string): string | null {
+  try {
+    if (headers === null || typeof headers !== 'object') {
+      return null;
+    }
+    const get = (headers as { get?: unknown }).get;
+    if (typeof get === 'function') {
+      const value: unknown = get.call(headers, name);
+      return typeof value === 'string' ? value : null;
+    }
+    const wanted = name.toLowerCase();
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase() === wanted && typeof value === 'string') {
+        return value;
+      }
+    }
+  } catch {
+    // A broken shim must not mask the HTTP error being reported.
+  }
+  return null;
+}
 
 /** Exponential backoff with full jitter (`random() * min(max, base·2^attempt)`),
  * spreading retries to avoid thundering-herd against the API. */
@@ -155,7 +213,10 @@ async function runTransform(transform: Transform, input: Uint8Array): Promise<Ui
 export class Request {
   /** Headers merged into every outgoing request. */
   headers: Record<string, string>;
-  /** Proxy URL applied to every request, if any. */
+  /**
+   * Proxy URL applied to every request, if any.
+   * @deprecated Ignored. Pass a proxy-capable `fetch` (undici `ProxyAgent` / `node-wreq`) instead.
+   */
   proxyUrl?: string;
   /** Default timeout in milliseconds. */
   timeout: number;
@@ -214,6 +275,11 @@ export class Request {
     this.headers['Authorization'] = `OAuth ${token}`;
   }
 
+  /** Remove the `Authorization` header. */
+  clearAuthorization(): void {
+    delete this.headers['Authorization'];
+  }
+
   /**
    * Set the `Accept-Language` header.
    *
@@ -232,9 +298,8 @@ export class Request {
    * @returns The unwrapped `result` payload, or `undefined` for an empty body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async get(url: string, params?: Params, timeout?: number, extraHeaders?: Record<string, string>): Promise<JSONValue | undefined> {
-    const bytes = await this.requestWrapper('GET', this.withQuery(url, params), undefined, timeout, extraHeaders);
-    return this.unwrap(bytes);
+  async get(url: string, params?: Params, timeout?: number, extraHeaders?: Record<string, string | null>): Promise<JSONValue | undefined> {
+    return this.send('GET', url, { params, timeout, headers: extraHeaders });
   }
 
   /**
@@ -246,16 +311,46 @@ export class Request {
    * @returns The unwrapped `result` payload, or `undefined` for an empty body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async post(url: string, data?: Params | string, timeout?: number, extraHeaders?: Record<string, string>): Promise<JSONValue | undefined> {
+  async post(url: string, data?: Params | string, timeout?: number, extraHeaders?: Record<string, string | null>): Promise<JSONValue | undefined> {
     // A pre-serialized string body is JSON (e.g. queue payloads); object bodies
     // are form-encoded. Tagging a JSON string as form-urlencoded makes some
     // endpoints (notably `/queues`) drop the connection, so pick the matching
     // `Content-Type` per body kind.
-    const init =
-      typeof data === 'string'
-        ? { body: data, json: true }
-        : { body: this.encodeForm(data), form: true };
-    const bytes = await this.requestWrapper('POST', url, init, timeout, extraHeaders);
+    return this.send('POST', url, { form: data ?? {}, timeout, headers: extraHeaders });
+  }
+
+  /**
+   * Perform a request and return the unwrapped result. The other verb helpers
+   * delegate here; use it directly to combine a query string with a body.
+   *
+   * @param method - HTTP method.
+   * @param url - Absolute request URL.
+   * @param options - Query, body, headers, timeout and retry options.
+   * @returns The unwrapped `result` payload, or `undefined` for an empty body.
+   * @throws {YandexMusicError} On any transport or API error.
+   */
+  async send(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    url: string,
+    options: SendOptions = {},
+  ): Promise<JSONValue | undefined> {
+    let body: BodyInit | undefined;
+    if (options.json !== undefined) {
+      body = { body: JSON.stringify(options.json), json: true };
+    } else if (typeof options.form === 'string') {
+      // A pre-serialized string body is JSON (e.g. queue payloads).
+      body = { body: options.form, json: true };
+    } else if (options.form !== undefined) {
+      body = { body: this.encodeForm(options.form), form: true };
+    }
+    const bytes = await this.requestWrapper(
+      method,
+      this.withQuery(url, options.params),
+      body,
+      options.timeout,
+      options.headers,
+      options.retry === true,
+    );
     return this.unwrap(bytes);
   }
 
@@ -265,12 +360,17 @@ export class Request {
    * @param url - Absolute request URL.
    * @param json - Object serialized as the JSON request body.
    * @param timeout - Optional per-call timeout override (milliseconds).
+   * @param options - Optional query `params` and `headers` (a `null` value removes a header).
    * @returns The unwrapped `result` payload, or `undefined` for an empty body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async postJson(url: string, json?: JSONValue, timeout?: number): Promise<JSONValue | undefined> {
-    const bytes = await this.requestWrapper('POST', url, { body: JSON.stringify(json ?? {}), json: true }, timeout);
-    return this.unwrap(bytes);
+  async postJson(
+    url: string,
+    json?: JsonInput,
+    timeout?: number,
+    options?: { params?: Params; headers?: Record<string, string | null> },
+  ): Promise<JSONValue | undefined> {
+    return this.send('POST', url, { json: json ?? {}, timeout, ...options });
   }
 
   /**
@@ -282,9 +382,13 @@ export class Request {
    * @returns The unwrapped `result` payload, or `undefined` for an empty body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async put(url: string, json?: JSONValue, timeout?: number): Promise<JSONValue | undefined> {
-    const bytes = await this.requestWrapper('PUT', url, { body: JSON.stringify(json ?? {}), json: true }, timeout);
-    return this.unwrap(bytes);
+  async put(
+    url: string,
+    json?: JsonInput,
+    timeout?: number,
+    options?: { params?: Params; headers?: Record<string, string | null> },
+  ): Promise<JSONValue | undefined> {
+    return this.send('PUT', url, { json: json ?? {}, timeout, ...options });
   }
 
   /**
@@ -296,9 +400,13 @@ export class Request {
    * @returns The unwrapped `result` payload, or `undefined` for an empty body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async delete(url: string, json?: JSONValue, timeout?: number): Promise<JSONValue | undefined> {
-    const bytes = await this.requestWrapper('DELETE', url, { body: JSON.stringify(json ?? {}), json: true }, timeout);
-    return this.unwrap(bytes);
+  async delete(
+    url: string,
+    json?: JsonInput,
+    timeout?: number,
+    options?: { params?: Params; headers?: Record<string, string | null> },
+  ): Promise<JSONValue | undefined> {
+    return this.send('DELETE', url, { json: json ?? {}, timeout, ...options });
   }
 
   /**
@@ -442,7 +550,7 @@ export class Request {
     const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
     const response = await this.fetchImpl(url, { method: 'GET', headers, signal });
     if (response.status < 200 || response.status > 299) {
-      this.handleErrorResponse(response.status, new Uint8Array(await response.arrayBuffer()));
+      this.handleErrorResponse(response.status, new Uint8Array(await response.arrayBuffer()), response.headers);
     }
     return response;
   }
@@ -540,18 +648,19 @@ export class Request {
 
   /**
    * Perform a request, retrying transient transport failures on idempotent
-   * (`GET`) methods with exponential backoff + jitter. Mutating methods are never
-   * retried (one attempt). Typed API errors (4xx/auth) are not retried either —
+   * (`GET`) methods with exponential backoff + jitter. Mutating methods are not
+   * retried (one attempt) unless the call opts in with `retry`. Typed API errors (4xx/auth) are not retried either —
    * only {@link NetworkError} and {@link TimedOutError} are.
    */
   private async requestWrapper(
     method: string,
     url: string,
-    body?: { body: string; form?: boolean; json?: boolean },
+    body?: BodyInit,
     timeout?: number,
-    extraHeaders?: Record<string, string>,
+    extraHeaders?: Record<string, string | null>,
+    retry = false,
   ): Promise<Uint8Array> {
-    const maxAttempts = method === 'GET' ? this.retries + 1 : 1;
+    const maxAttempts = method === 'GET' || retry ? this.retries + 1 : 1;
     let lastError: unknown;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
@@ -571,7 +680,11 @@ export class Request {
         if (attempt === maxAttempts - 1 || !retryable) {
           throw error;
         }
-        await sleep(backoff(attempt, this.retryBaseMs, this.retryMaxMs));
+        const serverDelay = error instanceof YandexMusicError ? error.retryAfterMs : undefined;
+        if (serverDelay !== undefined && serverDelay > this.retryMaxMs) {
+          throw error;
+        }
+        await sleep(serverDelay ?? backoff(attempt, this.retryBaseMs, this.retryMaxMs));
       }
     }
     throw lastError;
@@ -580,15 +693,27 @@ export class Request {
   private async attemptRequest(
     method: string,
     url: string,
-    body?: { body: string; form?: boolean; json?: boolean },
+    body?: BodyInit,
     timeout?: number,
-    extraHeaders?: Record<string, string>,
+    extraHeaders?: Record<string, string | null>,
   ): Promise<Uint8Array> {
     const controller = new AbortController();
     const ms = timeout ?? this.timeout;
     const timer = setTimeout(() => controller.abort(), ms);
 
-    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent, ...extraHeaders };
+    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
+    for (const [name, value] of Object.entries(extraHeaders ?? {})) {
+      if (value === null) {
+        const wanted = name.toLowerCase();
+        for (const existing of Object.keys(headers)) {
+          if (existing.toLowerCase() === wanted) {
+            delete headers[existing];
+          }
+        }
+      } else {
+        headers[name] = value;
+      }
+    }
     if (body?.form) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
     } else if (body?.json) {
@@ -609,7 +734,7 @@ export class Request {
       if (response.status >= 200 && response.status <= 299) {
         return content;
       }
-      this.handleErrorResponse(response.status, content);
+      this.handleErrorResponse(response.status, content, response.headers);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new TimedOutError();
@@ -696,32 +821,78 @@ export class Request {
     return [error, description].filter(Boolean).join(' ').trim();
   }
 
-  private handleErrorResponse(status: number, content: Uint8Array): never {
+  /** Error `code` from a response body: the OAuth `error` string, or an error object's `name`. */
+  private extractErrorCode(content: Uint8Array): string | undefined {
+    try {
+      const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(content)) as JSONValue;
+      if (!isJsonObject(data)) {
+        return undefined;
+      }
+      const result = data['result'];
+      const error = data['error'];
+      const candidates = [
+        typeof error === 'string' ? error : undefined,
+        isJsonObject(error) ? error['name'] : undefined,
+        data['name'],
+        isJsonObject(result) ? result['name'] : undefined,
+      ];
+      return candidates.find((c): c is string => typeof c === 'string' && c !== '');
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Parse `Retry-After` (delta-seconds or HTTP date) into milliseconds. */
+  private parseRetryAfter(headers?: ResponseLike['headers']): number | undefined {
+    const raw = readHeader(headers, 'retry-after')?.trim();
+    if (!raw) {
+      return undefined;
+    }
+    if (/^\d+$/.test(raw)) {
+      return Number(raw) * 1000;
+    }
+    const at = Date.parse(raw);
+    return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+  }
+
+  private handleErrorResponse(status: number, content: Uint8Array, headers?: ResponseLike['headers']): never {
     let message: string;
     try {
       message = this.extractErrorMessage(content) || `HTTP ${status}`;
     } catch {
-      message = 'Unknown HTTPError';
+      const text = new TextDecoder('utf-8').decode(content).slice(0, 200).trim();
+      message = text ? `HTTP ${status}: ${text}` : `HTTP ${status}`;
     }
+    const code = this.extractErrorCode(content);
+    const info = { status, code };
+    const withStatus = (m: string): string => (m.startsWith(`HTTP ${status}`) ? m : `${m} (${status})`);
 
     if (status === 401 || status === 403) {
-      throw new UnauthorizedError(message);
+      throw new UnauthorizedError(message, info);
     }
     if (status === 400) {
-      throw new BadRequestError(message);
+      throw new BadRequestError(message, info);
     }
     if (status === 404) {
-      throw new NotFoundError(message);
+      throw new NotFoundError(message, info);
     }
     if (status === 409) {
-      throw new ConflictError(message);
+      throw new ConflictError(message, info);
     }
     if (status === 413) {
-      throw new PayloadTooLargeError(message);
+      throw new PayloadTooLargeError(message, info);
+    }
+    if (status === 429) {
+      throw new TooManyRequestsError(message, { ...info, retryAfterMs: this.parseRetryAfter(headers) });
     }
     if (status === 502) {
-      throw new NetworkError('Bad Gateway');
+      // Kept as a plain NetworkError (pinned by the existing 0.3.0 tests).
+      throw new NetworkError('Bad Gateway', info);
     }
-    throw new NetworkError(`${message} (${status})`);
+    if (status >= 500 && status <= 599) {
+      const retryAfterMs = status === 503 ? this.parseRetryAfter(headers) : undefined;
+      throw new ServerError(withStatus(message), { ...info, retryAfterMs });
+    }
+    throw new NetworkError(withStatus(message), info);
   }
 }

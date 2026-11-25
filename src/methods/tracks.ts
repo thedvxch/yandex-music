@@ -10,6 +10,7 @@ import { Track } from '../models/track/track.js';
 import { AlbumSimilarEntities } from '../models/album/albumExtras.js';
 import {
   DownloadInfo,
+  FileInfo,
   LosslessDownloadInfo,
   SimilarTracks,
   TrackFullInfo,
@@ -22,8 +23,9 @@ import { ShotEvent } from '../models/shot.js';
 import {
   getSignRequest,
   getFileInfoSign,
-  convertTrackIdToNumber,
-  FILE_INFO_CODECS,
+  DESKTOP_CLIENT,
+  DESKTOP_SIGN_KEY,
+  FILE_INFO_CODECS_LIST,
   FILE_INFO_TRANSPORT,
 } from '../signRequest.js';
 import type { AbstractConstructor } from './mixin.js';
@@ -55,6 +57,46 @@ export interface PlayAudioOptions {
   endPositionSeconds?: number;
   /** ISO client timestamp. Defaults to now. */
   clientNow?: string;
+}
+
+/** Options for `/get-file-info` requests. */
+export interface FileInfoOptions {
+  /** Requested quality: `lossless`, `hq`, `nq`. Defaults to `lossless`. */
+  quality?: 'lossless' | 'hq' | 'nq' | (string & {});
+  /** Allowed codecs. Defaults to every known codec. */
+  codecs?: readonly string[];
+  /** Transport: `raw` or `encraw`. */
+  transport?: 'raw' | 'encraw' | (string & {});
+  /** Signing key override. Defaults to the desktop key. */
+  signKey?: string;
+  /** `X-Yandex-Music-Client` header override. Must match the signing key. */
+  clientHeader?: string;
+}
+
+/** Signed `GET /get-file-info`; returns the unwrapped result. */
+function requestFileInfo(
+  client: ClientBase,
+  trackId: string | number,
+  options: FileInfoOptions,
+  defaultTransport: string,
+) {
+  const quality = options.quality ?? 'lossless';
+  const codecs = options.codecs ?? FILE_INFO_CODECS_LIST;
+  const transport = options.transport ?? defaultTransport;
+  const sign = getFileInfoSign(trackId, quality, codecs, transport, options.signKey ?? DESKTOP_SIGN_KEY);
+  return client.request.get(
+    `${client.baseUrl}/get-file-info`,
+    {
+      ts: sign.ts,
+      trackId,
+      quality,
+      codecs: codecs.join(','),
+      transports: transport,
+      sign: sign.value,
+    },
+    undefined,
+    { 'X-Yandex-Music-Client': options.clientHeader ?? DESKTOP_CLIENT },
+  );
 }
 
 /**
@@ -96,36 +138,49 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
     }
 
     /**
+     * Fetch file info for a track via the signed `/get-file-info` endpoint
+     * (reference-library `tracks_file_info`).
+     *
+     * @remarks
+     * Requires authorization; `lossless` needs a subscription. Defaults to the
+     * `raw` transport, so the stream is not encrypted. The server picks the codec
+     * from `options.codecs`; when the requested quality is unavailable it returns
+     * the best available variant.
+     *
+     * @param trackId - The track id, sent exactly as given.
+     * @param options - Quality, codecs, transport and signing overrides.
+     * @returns The file info, or `null` when the endpoint returns none.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async tracksFileInfo(trackId: string | number, options: FileInfoOptions = {}): Promise<FileInfo | null> {
+      const result = await requestFileInfo(this, trackId, options, 'raw');
+      return FileInfo.deJson(result, this as unknown as Client);
+    }
+
+    /**
      * Fetch lossless (FLAC) download info for a track via the `/get-file-info`
      * endpoint.
      *
      * @remarks
      * Unlike {@link tracksDownloadInfo} (legacy lossy mp3/aac), this resolves the
-     * modern signed endpoint that can serve **lossless FLAC**. The returned stream
-     * is AES-CTR-encrypted (`transport: encraw`); {@link LosslessDownloadInfo.download}
-     * / {@link LosslessDownloadInfo.downloadBytes} decrypt it transparently. When a
-     * track has no lossless source the server falls back to a lossy codec — check
-     * {@link LosslessDownloadInfo.isLossless} / `.codec`.
+     * modern signed endpoint that can serve **lossless FLAC**. The transport
+     * defaults to `encraw`, so the returned stream is AES-CTR-encrypted;
+     * {@link LosslessDownloadInfo.download} / {@link LosslessDownloadInfo.downloadBytes}
+     * decrypt it transparently. When a track has no lossless source the server falls
+     * back to a lossy codec: check {@link LosslessDownloadInfo.isLossless} / `.codec`.
      *
-     * @param trackId - The track id (numeric, or `"id:albumId"`).
+     * @param trackId - The track id, sent exactly as given.
      * @param quality - Requested quality. Defaults to `lossless`.
+     * @param options - Codecs, transport (default `encraw`) and signing overrides.
      * @returns The file info, or `null` when the endpoint returns none.
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksLosslessInfo(
       trackId: string | number,
       quality = 'lossless',
+      options: Omit<FileInfoOptions, 'quality'> = {},
     ): Promise<LosslessDownloadInfo | null> {
-      const id = convertTrackIdToNumber(trackId);
-      const sign = getFileInfoSign(id, quality);
-      const result = await this.request.get(`${this.baseUrl}/get-file-info`, {
-        ts: sign.ts,
-        trackId: id,
-        quality,
-        codecs: FILE_INFO_CODECS,
-        transports: FILE_INFO_TRANSPORT,
-        sign: sign.value,
-      });
+      const result = await requestFileInfo(this, trackId, { ...options, quality }, FILE_INFO_TRANSPORT);
       const info = isJsonObject(result) ? result['downloadInfo'] : undefined;
       return LosslessDownloadInfo.deJson(info, this as unknown as Client);
     }
@@ -216,13 +271,14 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      */
     async playAudio(options: PlayAudioOptions): Promise<boolean> {
       const now = `${new Date().toISOString()}`;
+      // Unlike other methods, an unresolved uid is omitted rather than raising IdMissingError.
       const uid = options.uid ?? this.accountUid;
       const data = {
         'track-id': options.trackId,
         'from-cache': String(options.fromCache ?? false),
         from: options.from,
         'play-id': options.playId ?? '',
-        uid: uid ?? '',
+        ...(uid !== undefined ? { uid } : {}),
         timestamp: options.timestamp ?? now,
         'track-length-seconds': options.trackLengthSeconds ?? 0,
         'total-played-seconds': options.totalPlayedSeconds ?? 0,
@@ -259,9 +315,12 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
         totalPlayedSeconds: options.totalPlayedSeconds,
         endPositionSeconds: options.endPositionSeconds,
       }));
-      const url = `${this.baseUrl}/plays?client-now=${encodeURIComponent(clientNow ?? now)}`;
-      // JSON round-trip drops the `undefined` fields JSONValue can't represent.
-      const result = await this.request.postJson(url, JSON.parse(JSON.stringify({ plays })));
+      const result = await this.request.postJson(
+        `${this.baseUrl}/plays`,
+        { plays },
+        undefined,
+        { params: { 'client-now': clientNow ?? now } },
+      );
       return result === 'ok';
     }
 
@@ -277,17 +336,15 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
       tracks: Array<{ trackId: string | number; artistIds: Array<string | number>; albumId?: string | number }>,
       locations?: Array<string | number>,
     ): Promise<PlayerInformers | null> {
-      const url = locations?.length
-        ? `${this.baseUrl}/player-informers?locations=${locations.join(',')}`
-        : `${this.baseUrl}/player-informers`;
+      const params = locations?.length ? { locations: locations.join(',') } : undefined;
       const body = {
         tracks: tracks.map((t) => ({
           trackId: String(t.trackId),
-          artistIds: t.artistIds?.map(String),
+          artistIds: (t.artistIds ?? []).map(String),
           albumId: t.albumId !== undefined ? String(t.albumId) : undefined,
         })),
       };
-      const result = await this.request.postJson(url, JSON.parse(JSON.stringify(body)));
+      const result = await this.request.postJson(`${this.baseUrl}/player-informers`, body, undefined, { params });
       return PlayerInformers.deJson(result, this as unknown as Client);
     }
 

@@ -33,8 +33,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsConcerts(artistId: string | number): Promise<ArtistConcerts | null> {
-      const result = await this.request.get(`${this.baseUrl}/artists/${artistId}/concerts`);
-      return ArtistConcerts.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/concerts`, ArtistConcerts.deJson);
     }
 
     /**
@@ -45,8 +44,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async concertInfo(concertId: string | number): Promise<ConcertInfo | null> {
-      const result = await this.request.get(`${this.baseUrl}/concerts/${concertId}/info`);
-      return ConcertInfo.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/concerts/${concertId}/info`, ConcertInfo.deJson);
     }
 
     /**
@@ -58,8 +56,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async concertSkeleton(concertId: string | number, skeletonId = 'concert_page'): Promise<ConcertSkeleton | null> {
-      const result = await this.request.get(`${this.baseUrl}/concerts/${concertId}/skeletons/${skeletonId}`);
-      return ConcertSkeleton.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/concerts/${concertId}/skeletons/${skeletonId}`, ConcertSkeleton.deJson);
     }
 
     /**
@@ -82,8 +79,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async concertsLocations(): Promise<ConcertLocations | null> {
-      const result = await this.request.get(`${this.baseUrl}/concerts/locations`);
-      return ConcertLocations.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/concerts/locations`, ConcertLocations.deJson);
     }
 
     /**
@@ -93,8 +89,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async concertsTabConfig(): Promise<ConcertTabConfig | null> {
-      const result = await this.request.get(`${this.baseUrl}/concerts/tab-config`);
-      return ConcertTabConfig.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/concerts/tab-config`, ConcertTabConfig.deJson);
     }
 
     /**
@@ -109,10 +104,13 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       artistIds: Array<string | number>,
       locations?: Array<string | number>,
     ): Promise<ArtistsWithConcerts | null> {
-      const url = locations?.length
-        ? `${this.baseUrl}/concerts/landing/artists?locations=${locations.join(',')}`
-        : `${this.baseUrl}/concerts/landing/artists`;
-      const result = await this.request.postJson(url, { artistIds: artistIds.map(String) });
+      const params = locations?.length ? { locations: locations.join(',') } : undefined;
+      const result = await this.request.postJson(
+        `${this.baseUrl}/concerts/landing/artists`,
+        { artistIds: artistIds.map(String) },
+        undefined,
+        { params },
+      );
       return ArtistsWithConcerts.deJson(result, this as unknown as Client);
     }
   }

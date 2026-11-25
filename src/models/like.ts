@@ -40,12 +40,50 @@ export class Like extends YandexMusicModel {
       return null;
     }
     const model = new Like(client);
-    assign(model, raw, ['type', 'id', 'timestamp', 'shortDescription', 'description', 'isPremiere', 'isBanner']);
+    assign(model, raw, ['type', 'timestamp', 'shortDescription', 'description', 'isPremiere', 'isBanner']);
+    model.id = raw['id'] === undefined || raw['id'] === null ? undefined : String(raw['id']);
     model.album = Album.deJson(raw['album'], client) ?? undefined;
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.playlist = Playlist.deJson(raw['playlist'], client) ?? undefined;
     reportUnknown(client, 'Like', raw, model);
     return model;
+  }
+
+  /**
+   * Deserialize a list of likes of a known entity type (reference `Like.de_list`).
+   *
+   * For `type === 'artist'` an item without an `artist` key is itself the artist.
+   * Every resulting {@link Like} carries `type`.
+   *
+   * @param raw - Raw JSON array.
+   * @param client - The owning client.
+   * @param type - Liked entity type (`artist`, `album` or `playlist`).
+   */
+  static deListTyped(raw: JSONValue | undefined, client: Client | undefined, type: string): Like[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    const result: Like[] = [];
+    for (const item of raw) {
+      if (!isJsonObject(item)) {
+        continue;
+      }
+      let like: Like | null;
+      if (type === 'artist' && !('artist' in item)) {
+        like = new Like(client);
+        like.artist = Artist.deJson(item, client) ?? undefined;
+        const id = item['id'];
+        like.id = id === undefined || id === null ? undefined : String(id);
+      } else {
+        like = Like.deJson(item, client);
+      }
+      if (like === null) {
+        continue;
+      }
+      like.type = type;
+      result.push(like);
+    }
+    return result;
   }
 }
 

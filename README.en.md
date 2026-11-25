@@ -154,6 +154,8 @@ set separately via `client.realtime({ deviceInfo })`.
 | `device` | device descriptor for queue requests |
 | `fetch` | custom `fetch` (proxy, mocks, retries) |
 | `retries` | retries for transient GET failures (default 2, 0 = off) |
+| `retryBaseMs` / `retryMaxMs` | initial and maximum retry backoff in ms (default 300 / 4000) |
+| `timeout` | default per-request timeout in ms (default 5000; ignored when `request` is supplied) |
 | `reportUnknownFields` | surface API fields the models don't yet map |
 | `onUnknownField` | hook to use instead of `console.warn` for the same drift |
 | `request` | a fully pre-configured transport (overrides `userAgent`/`headers`/`fetch`) |
@@ -192,22 +194,67 @@ try {
 `GET` requests automatically retry on transient failures (exponential backoff +
 jitter, `retries` attempts on top, 2 by default). Mutating requests
 (`POST`/`PUT`/`DELETE`) are never retried automatically — this guards against
-duplicate side effects (e.g. a double like).
+duplicate side effects (e.g. a double like). The exception is batch reads sent as
+`POST` (`tracks`, `albums`, `artists`, `playlists`): they are idempotent and are
+retried like `GET`.
+
+### Errors and retries
+
+`YandexMusicError` carries `status` (the HTTP code), `code` (a machine-readable
+code from the body, for example the OAuth `error` field) and `retryAfterMs`:
+
+- `429` raises `TooManyRequestsError` and `5xx` (except `502`) raises
+  `ServerError`; both extend `NetworkError`. `502` stays
+  `NetworkError('Bad Gateway')` with `status` 502.
+- `429` and `503` honour the `Retry-After` header: the pause comes from it, and a
+  delay above `retryMaxMs` throws immediately instead of waiting.
+- A non-JSON error body produces a message of the form `HTTP <status>: <first 200 chars>`.
+- Methods that need a user id throw `IdMissingError` before any request when
+  `init()` was not called and no `userId` was passed.
+
+```ts
+import { TooManyRequestsError } from '@dvxch/yandex-music';
+
+try {
+  await client.feed();
+} catch (error) {
+  if (error instanceof TooManyRequestsError) {
+    console.log(error.status, error.retryAfterMs); // 429, the server hint in ms or undefined
+  }
+}
+```
+
+### Token and timeout
+
+`client.token` is a setter: assigning a new value updates the `Authorization`
+header at once, and assigning `undefined` removes it. The default timeout is set
+with the `timeout` option; a single request can override it through
+`client.request.send(method, url, { timeout })`. There is no built-in proxy
+support: pass a proxy-aware `fetch`. The Android `proxyUrl` option is deprecated
+(it was never applied).
+
+### API drift: `reportUnknown`
+
+The `onUnknownField` hook receives `{ model, fields, raw, shapes }`. `fields` are
+the response keys the model did not map (declared fields that are never assigned
+count too). `shapes` describes only the *type* of each key's value, for example
+`list[{id: int, title: str}]` (depth up to 3, strings up to 500 chars); the data
+itself is not included.
 
 ## Implemented endpoints
 
 | Domain      | Methods |
 | ----------- | ------- |
 | account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
-| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `playAudio`, `afterTrack` |
+| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksFileInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `playAudio`, `afterTrack` |
 | albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer` |
 | artists     | `artists`, `artistsBriefInfo`, `artistsInfo`, `artistsAbout`, `artistsClips`, `artistsDonation`, `artistsSkeleton`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
-| likes       | `usersLikesTracks`/`Albums`/`Artists`/`Playlists`/`Clips` + add/remove for each; `usersDislikesTracks`/`Artists` + add/remove |
+| likes       | `usersLikesTracks`/`Albums`/`Artists`/`Playlists`/`Clips` + add/remove for each, `usersLikesArtistsWithTimestamps`; `usersDislikesTracks`/`Artists` + add/remove |
 | playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `usersSettings`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow), `refreshAccessToken` (renew via refresh token) |
 | landing     | `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
-| radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`rotorStationFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip` shortcuts), `rotorStationSettings2` |
+| radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`rotorStationFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip` shortcuts), `rotorStationSettings2`, `rotorStationStream`, `rotorStationStreamFeedback`, `rotorWaveSettings`, `rotorWaveLast`, `rotorWaveLastReset`, `rotorSessionNew`, `rotorSessionClone`, `rotorSessionTracks`, `rotorSessionFeedback` (+`rotorSessionFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip` shortcuts), `rotorSessionFeedbacks`, `rotorSessionsFeedbacks`, `rotorCombinedSessionNew`, `rotorCombinedSessionNext`, `rotorCombinedSessionLanding` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |
 | history     | `musicHistory`, `musicHistoryItems` |
 | clips       | `clips`, `clipsWillLike` |
@@ -218,7 +265,7 @@ duplicate side effects (e.g. a double like).
 | pins        | `pins`, `pin{Album,Artist,Playlist,Wave}`, `unpin{Album,Artist,Playlist,Wave}` |
 | presaves    | `usersPresaves`, `usersPresavesAdd`, `usersPresavesRemove` |
 | concerts    | `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
-| realtime    | `client.realtime()` → `RealtimeClient` (Ynison; needs `ws`) |
+| realtime    | `client.realtime()` → `RealtimeClient` (Ynison; needs `ws`): events, `nowPlaying`, commands `pause`/`resume`/`nextTrack`/`previousTrack`/`setVolume` |
 
 ### Downloads and quality
 
@@ -231,9 +278,29 @@ const best = [...variants].sort((a, b) => (b.bitrateInKbps ?? 0) - (a.bitrateInK
 await best!.download('track.mp3');
 ```
 
-Lossless (FLAC) goes through a separate path via `tracksLosslessInfo` /
-`track.getLosslessInfo(quality)` (`LosslessDownloadInfo`, on-the-fly AES-CTR
-decryption), documented in the package's types.
+Lossless (FLAC) goes through a separate path, the signed `get-file-info` endpoint:
+
+- `tracksFileInfo(trackId, { quality, codecs, transport, signKey, clientHeader })` /
+  `track.getFileInfo(options)` returns a `FileInfo` whose `downloadInfo` is a
+  `LosslessDownloadInfo`. `quality` is `lossless` (default), `hq` or `nq`; the
+  default transport is `raw` (a plain stream).
+- `tracksLosslessInfo(trackId, quality, options)` /
+  `track.getLosslessInfo(quality)` returns the `LosslessDownloadInfo` directly and
+  keeps the `encraw` transport; `download()` decrypts the AES-CTR stream on the fly.
+- Requests are signed with the desktop key and the
+  `YandexMusicDesktopAppWindows/5.95.0` client header (override with `signKey` and
+  `clientHeader`; they must match). The track id is sent as given.
+- When a track has no lossless source the server answers with a lossy codec:
+  check `info.isLossless` and `info.codec`.
+
+```ts
+const file = await client.tracksFileInfo(trackId, { quality: 'lossless' });
+const info = file?.downloadInfo;
+if (info) {
+  console.log(info.codec, info.isLossless, info.isEncrypted);
+  await info.download('track.flac');
+}
+```
 
 ## Realtime
 
@@ -271,6 +338,52 @@ rotate it per reconnect**: Ynison dedupes its broadcast by device, so a fresh id
 drops your observer from the fan-out and the state silently freezes. The `state` /
 `lastStateAgeMs` / `liveProgressMs()` getters give the rest of the snapshot for `/health`.
 
+### Ynison commands
+
+`RealtimeClient` (and `YnisonClient`) can control the device that is currently
+playing: `pause()`, `resume()`, `nextTrack()`, `previousTrack()`,
+`setVolume(volume, targetDeviceId?)` and the low-level `sendRaw(request)`. A
+command goes to the active device; with no playing device it throws
+`YnisonNoActiveDeviceError`, at the queue edge `YnisonQueueBoundaryError`, and
+on a closed connection `YnisonConnectionClosedError`.
+
+```ts
+const rt = client.realtime();
+rt.start(); // don't await
+// ... after the first state:
+rt.pause();
+rt.nextTrack();
+rt.setVolume(0.5);
+```
+
+Terminal errors (`YnisonUnauthorizedError`, `YnisonDeviceDisplacedError`) stop
+reconnecting (the cause is in `terminalError`); a server go-away is not terminal:
+the client waits `min(retryAfterMs, goAwayMaxMs)`; everything else is retried on the schedule
+`[0, 1000, 5000, 30000]` ms plus jitter (`reconnectBaseMs` is only a minimum
+delay, and the server's `ynison-backoff-millis` replaces the schedule). If two
+observers on one token displace each other, give them different `deviceId`s;
+`deviceIdFromToken(token)` returns a deterministic id. The `ynison: { redirectUrl,
+stateUrl, connectTimeoutMs }` option overrides the endpoints and the connect
+timeout. The commands were implemented from the reference library and have not
+been run against a real player.
+
+### Playlists: revision
+
+`usersPlaylistsChange`, `usersPlaylistsInsertTrack` and `usersPlaylistsDeleteTrack`
+take an optional `revision`: when omitted, the library first fetches the
+playlist's current revision (falling back to 1). An explicit stale revision is
+rejected by the server with HTTP 412.
+
+### "My Wave" sessions
+
+`rotorSessionNew(seeds, options)` now sends a `POST` with a JSON body. The usual
+loop is `rotorSessionNew` → `rotorSessionTracks(sessionId, { queue })` → the
+feedback shortcuts `rotorSessionFeedbackTrackStarted` / `TrackFinished` / `Skip`
+(see `examples/13-wave-session.ts`). The event timestamp defaults to an ISO "now".
+The old `rotorSessionNew(boolean)` and `rotorSessionsFeedbacks(params)` forms are
+deprecated. The station, stream and combined-session request bodies follow the
+reference library and have not been verified live.
+
 ## Examples
 
 Runnable examples live in [`examples/`](./examples):
@@ -286,7 +399,10 @@ Runnable examples live in [`examples/`](./examples):
 - `09-lyrics.ts` — time-synced (LRC) lyrics;
 - `10-download-quality.ts` — quality/codec selection incl. lossless (FLAC);
 - `11-artist.ts` — artist brief info, tracks, discography, similar;
-- `12-custom-fetch.ts` — injecting a custom `fetch` (e.g. `node-wreq` for TLS impersonation).
+- `12-custom-fetch.ts` — injecting a custom `fetch` (e.g. `node-wreq` for TLS impersonation);
+- `13-wave-session.ts` — a "My Wave" session loop: new session, track batches, feedback;
+- `14-ynison-remote.ts` — controlling a playing device over Ynison (pause, resume, next);
+- `15-file-info.ts` — `tracksFileInfo` download (lossless with an hq fallback).
 
 See [`examples/README.md`](./examples/README.md) for details and run commands.
 

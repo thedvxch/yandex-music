@@ -26,8 +26,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksDisclaimer(trackId: string | number): Promise<Disclaimer | null> {
-      const result = await this.request.get(`${this.baseUrl}/tracks/${trackId}/disclaimer`);
-      return Disclaimer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/tracks/${trackId}/disclaimer`, Disclaimer.deJson);
     }
 
     /**
@@ -38,8 +37,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async clipsDisclaimer(clipId: string | number): Promise<Disclaimer | null> {
-      const result = await this.request.get(`${this.baseUrl}/clips/${clipId}/disclaimer`);
-      return Disclaimer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/clips/${clipId}/disclaimer`, Disclaimer.deJson);
     }
 
     /**
@@ -50,8 +48,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsDisclaimer(albumId: string | number): Promise<Disclaimer | null> {
-      const result = await this.request.get(`${this.baseUrl}/albums/${albumId}/disclaimer`);
-      return Disclaimer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/albums/${albumId}/disclaimer`, Disclaimer.deJson);
     }
 
     /**
@@ -62,8 +59,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsDisclaimer(artistId: string | number): Promise<Disclaimer | null> {
-      const result = await this.request.get(`${this.baseUrl}/artists/${artistId}/disclaimer`);
-      return Disclaimer.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/artists/${artistId}/disclaimer`, Disclaimer.deJson);
     }
 
     /**

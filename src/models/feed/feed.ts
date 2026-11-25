@@ -59,6 +59,8 @@ export class ArtistEvent extends YandexMusicModel {
   tracks?: Track[];
   /** Similar artists derived from listening history. */
   similarToArtistsFromHistory?: Artist[];
+  /** Whether the user is subscribed to the artist (liked). */
+  subscribed?: boolean;
 
   /** @see {@link ArtistEvent} */
   static deJson(raw: JSONValue | undefined, client?: Client): ArtistEvent | null {
@@ -69,6 +71,7 @@ export class ArtistEvent extends YandexMusicModel {
     model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
     model.tracks = deList(Track.deJson, raw['tracks'], client);
     model.similarToArtistsFromHistory = deList(Artist.deJson, raw['similarToArtistsFromHistory'], client);
+    assign(model, raw, ['subscribed']);
     reportUnknown(client, 'ArtistEvent', raw, model);
     return model;
   }
@@ -90,10 +93,10 @@ export class Event extends YandexMusicModel {
   artists?: ArtistEvent[];
   /** Album sub-events featured in the event. */
   albums?: AlbumEvent[];
-  /** Free-form message blocks (raw JSON). */
-  message?: JSONValue;
-  /** Device descriptor (raw JSON). */
-  device?: JSONValue;
+  /** Event message text. */
+  message?: string;
+  /** Device name. */
+  device?: string;
   /** Number of tracks in the event. */
   tracksCount?: number;
   /** Associated genre. */
@@ -185,6 +188,27 @@ export class Day extends YandexMusicModel {
   }
 }
 
+/** A notification headline shown above the feed (for example a "vk-not-bound" notification). */
+export class FeedHeadline extends YandexMusicModel {
+  /** Headline kind (for example "notification"). */
+  type?: string;
+  /** Headline id. */
+  id?: string;
+  /** Headline message code or text. */
+  message?: string;
+
+  /** @see {@link FeedHeadline} */
+  static deJson(raw: JSONValue | undefined, client?: Client): FeedHeadline | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new FeedHeadline(client);
+    assign(model, raw, ['type', 'id', 'message']);
+    reportUnknown(client, 'FeedHeadline', raw, model);
+    return model;
+  }
+}
+
 /** The personalised feed (`/feed`). */
 export class Feed extends YandexMusicModel {
   /** Whether more events can be loaded. */
@@ -195,14 +219,14 @@ export class Feed extends YandexMusicModel {
   isWizardPassed?: boolean;
   /** Personalised generated playlists. */
   generatedPlaylists?: GeneratedPlaylist[];
-  /** Headline blocks (raw JSON). */
-  headlines?: JSONValue[];
+  /** Notification headlines shown above the feed. */
+  headlines?: FeedHeadline[];
   /** Today's date (`YYYY-MM-DD`). */
   today?: string;
   /** The feed days. */
   days?: Day[];
-  /** Revision token for the next page (raw JSON). */
-  nextRevision?: JSONValue;
+  /** Revision token for the next page. */
+  nextRevision?: string;
 
   /** @see {@link Feed} */
   static deJson(raw: JSONValue | undefined, client?: Client): Feed | null {
@@ -210,7 +234,8 @@ export class Feed extends YandexMusicModel {
       return null;
     }
     const model = new Feed(client);
-    assign(model, raw, ['canGetMoreEvents', 'pumpkin', 'isWizardPassed', 'headlines', 'today', 'nextRevision']);
+    assign(model, raw, ['canGetMoreEvents', 'pumpkin', 'isWizardPassed', 'today', 'nextRevision']);
+    model.headlines = deList(FeedHeadline.deJson, raw['headlines'], client);
     model.generatedPlaylists = deList(GeneratedPlaylist.deJson, raw['generatedPlaylists'], client);
     model.days = deList(Day.deJson, raw['days'], client);
     reportUnknown(client, 'Feed', raw, model);

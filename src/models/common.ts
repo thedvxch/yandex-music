@@ -221,3 +221,70 @@ export class ExtraAction extends YandexMusicModel {
     return model;
   }
 }
+
+/** Genre image set (raw keys `208x208` and `300x300`). */
+export class Images extends YandexMusicModel {
+  /** URL of the 208x208 image (raw key `208x208`). */
+  '208x208'?: string;
+  /** URL of the 300x300 image (raw key `300x300`). */
+  '300x300'?: string;
+
+  /** @see {@link Images} */
+  static deJson(raw: JSONValue | undefined, client?: Client): Images | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new Images(client);
+    assign(model, raw, ['208x208', '300x300']);
+    reportUnknown(client, 'Images', raw, model);
+    return model;
+  }
+}
+
+/** A tag (collection) descriptor. */
+export class Tag extends YandexMusicModel {
+  /** Tag id. */
+  id?: string;
+  /** Lower-case tag value. */
+  value?: string;
+  /** Display name. */
+  name?: string;
+  /** OpenGraph description. */
+  ogDescription?: string;
+  /** OpenGraph image URL. */
+  ogImage?: string;
+
+  /** @see {@link Tag} */
+  static deJson(raw: JSONValue | undefined, client?: Client): Tag | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new Tag(client);
+    assign(model, raw, ['id', 'value', 'name', 'ogDescription', 'ogImage']);
+    reportUnknown(client, 'Tag', raw, model);
+    return model;
+  }
+}
+
+/** Server-side invocation metadata attached to some responses. */
+export class InvocationInfo extends YandexMusicModel {
+  /** Handling host name. */
+  hostname?: string;
+  /** Request id. */
+  reqId?: string;
+  /** Execution time in milliseconds. */
+  execDurationMillis?: number;
+  /** Application name. */
+  appName?: string;
+
+  /** @see {@link InvocationInfo} */
+  static deJson(raw: JSONValue | undefined, client?: Client): InvocationInfo | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new InvocationInfo(client);
+    assign(model, raw, ['hostname', 'reqId', 'execDurationMillis', 'appName']);
+    reportUnknown(client, 'InvocationInfo', raw, model);
+    return model;
+  }
+}

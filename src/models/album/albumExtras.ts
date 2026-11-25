@@ -6,6 +6,7 @@
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Artist } from '../artist/artist.js';
 import { Album } from './album.js';
+import { SimilarEntityItem } from '../wave.js';
 import { TrailerInfo } from '../trailerInfo.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
@@ -35,8 +36,8 @@ export class AlbumTrailer extends YandexMusicModel {
 
 /** Entities similar to an album (used for curated coloring/recommendations). */
 export class AlbumSimilarEntities extends YandexMusicModel {
-  /** Similar entity items (raw JSON, pending a typed `SimilarEntityItem` model). */
-  items?: JSONValue[];
+  /** Similar entity items. */
+  items?: SimilarEntityItem[];
 
   /** @see {@link AlbumSimilarEntities} */
   static deJson(raw: JSONValue | undefined, client?: Client): AlbumSimilarEntities | null {
@@ -44,7 +45,7 @@ export class AlbumSimilarEntities extends YandexMusicModel {
       return null;
     }
     const model = new AlbumSimilarEntities(client);
-    model.items = Array.isArray(raw['items']) ? (raw['items'] as JSONValue[]) : undefined;
+    model.items = Array.isArray(raw['items']) ? deList(SimilarEntityItem.deJson, raw['items'], client) : undefined;
     reportUnknown(client, 'AlbumSimilarEntities', raw, model);
     return model;
   }

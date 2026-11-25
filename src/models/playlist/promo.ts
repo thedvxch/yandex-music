@@ -67,6 +67,28 @@ export class MadeFor extends YandexMusicModel {
 }
 
 /**
+ * Marker that a playlist is personalised for the current user.
+ */
+export class MadeForUser extends YandexMusicModel {
+  /** Whether the playlist was made for the current user. */
+  isMadeForUser?: boolean;
+  /** Inflected forms of the user's name. */
+  caseForms?: CaseForms;
+
+  /** @see {@link MadeForUser} */
+  static deJson(raw: JSONValue | undefined, client?: Client): MadeForUser | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new MadeForUser(client);
+    assign(model, raw, ['isMadeForUser']);
+    model.caseForms = CaseForms.deJson(raw['caseForms'], client) ?? undefined;
+    reportUnknown(client, 'MadeForUser', raw, model);
+    return model;
+  }
+}
+
+/**
  * Aggregate play counter shown on some personalized playlists.
  */
 export class PlayCounter extends YandexMusicModel {

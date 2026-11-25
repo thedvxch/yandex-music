@@ -1,6 +1,6 @@
 {
   "name": "@dvxch/yandex-music",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Typed, async TypeScript client for the Yandex Music API",
   "keywords": [
     "yandex",
@@ -42,17 +42,19 @@
     "assets/hero.png",
     "assets/mark.svg",
     "README.md",
-    "README.en.md"
+    "README.en.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit -p tsconfig.json --noUnusedLocals --noUnusedParameters",
     "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "docs": "typedoc",
-    "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "npm run clean && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

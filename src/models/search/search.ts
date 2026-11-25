@@ -33,12 +33,38 @@ const TYPE_TO_DEJSON: Record<string, DeJson<SearchEntity>> = {
 };
 
 /**
+ * Deserialize an entity by its search result `type`.
+ *
+ * @remarks An unregistered type is reported through `reportUnknown` as the field
+ * `type:<value>` (with the payload shape) instead of being dropped silently.
+ */
+function deJsonByType(
+  client: Client | undefined,
+  label: string,
+  type: string | undefined,
+  payload: JSONValue | undefined,
+): SearchEntity | undefined {
+  if (type === undefined) {
+    return undefined;
+  }
+  const deJsonFn = Object.hasOwn(TYPE_TO_DEJSON, type) ? TYPE_TO_DEJSON[type] : undefined;
+  if (!deJsonFn) {
+    reportUnknown(client, label, { [`type:${type}`]: payload ?? null }, {});
+    return undefined;
+  }
+  return deJsonFn(payload, client) ?? undefined;
+}
+
+/**
  * One typed block of search results (for example all matching tracks).
  *
  * @typeParam T - The entity type contained in {@link SearchResult.results}.
  */
 export class SearchResult<T extends SearchEntity = SearchEntity> extends YandexMusicModel {
-  /** Result type (`track`, `artist`, `album`, `playlist`, `video`, `user`). */
+  /**
+   * Result type: `track`, `artist`, `album`, `playlist`, `video`, `user`,
+   * `podcast`, `podcast_episode`, `clip` or `concert`.
+   */
   type?: string;
   /** Total number of matches. */
   total?: number;
@@ -93,9 +119,8 @@ export class SearchHistoryItem extends YandexMusicModel {
     }
     const model = new SearchHistoryItem(client);
     assign(model, raw, ['type']);
-    const deJsonFn = model.type ? TYPE_TO_DEJSON[model.type] : undefined;
-    model.entity = deJsonFn ? (deJsonFn(raw[model.type!], client) ?? undefined) : undefined;
-    reportUnknown(client, 'SearchHistoryItem', raw, model);
+    model.entity = deJsonByType(client, 'SearchHistoryItem', model.type, model.type ? raw[model.type] : undefined);
+    reportUnknown(client, 'SearchHistoryItem', raw, model, model.type ? [model.type] : undefined);
     return model;
   }
 }
@@ -120,9 +145,8 @@ export class SearchInstantItem extends YandexMusicModel {
     }
     const model = new SearchInstantItem(client);
     assign(model, raw, ['type']);
-    const deJsonFn = model.type ? TYPE_TO_DEJSON[model.type] : undefined;
-    model.entity = deJsonFn ? (deJsonFn(raw[model.type!], client) ?? undefined) : undefined;
-    reportUnknown(client, 'SearchInstantItem', raw, model);
+    model.entity = deJsonByType(client, 'SearchInstantItem', model.type, model.type ? raw[model.type] : undefined);
+    reportUnknown(client, 'SearchInstantItem', raw, model, model.type ? [model.type] : undefined);
     return model;
   }
 }
@@ -202,8 +226,7 @@ export class Best extends YandexMusicModel {
     }
     const model = new Best(client);
     assign(model, raw, ['type', 'text']);
-    const deJson = typeof model.type === 'string' ? TYPE_TO_DEJSON[model.type] : undefined;
-    model.result = deJson ? (deJson(raw['result'], client) ?? undefined) : undefined;
+    model.result = deJsonByType(client, 'Best', typeof model.type === 'string' ? model.type : undefined, raw['result']);
     reportUnknown(client, 'Best', raw, model);
     return model;
   }
@@ -225,6 +248,35 @@ export class Suggestions extends YandexMusicModel {
     assign(model, raw, ['suggestions']);
     model.best = Best.deJson(raw['best'], client) ?? undefined;
     reportUnknown(client, 'Suggestions', raw, model);
+    return model;
+  }
+}
+
+/** The promotional banner of a search response. */
+export class SearchBanner extends YandexMusicModel {
+  /** Banner text. */
+  text?: string;
+  /** Text used to start a search. */
+  textForSearch?: string;
+  /** Web URL. */
+  url?: string;
+  /** Deep-link URL scheme. */
+  urlScheme?: string;
+  /** Text color. */
+  textColor?: string;
+  /** Text background color. */
+  textBackgroundColor?: string;
+  /** Image URL. */
+  imageUrl?: string;
+
+  /** @see {@link SearchBanner} */
+  static deJson(raw: JSONValue | undefined, client?: Client): SearchBanner | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new SearchBanner(client);
+    assign(model, raw, ['text', 'textForSearch', 'url', 'urlScheme', 'textColor', 'textBackgroundColor', 'imageUrl']);
+    reportUnknown(client, 'SearchBanner', raw, model);
     return model;
   }
 }
@@ -255,6 +307,8 @@ export class Search extends YandexMusicModel {
   podcastEpisodes?: SearchResult<Track>;
   /** Matching clips (short videos). */
   clips?: SearchResult<Clip>;
+  /** Promotional banner. */
+  banner?: SearchBanner;
   /** Result type filter that was applied. */
   type?: string;
   /** Page index. */
@@ -299,6 +353,7 @@ export class Search extends YandexMusicModel {
     model.podcastEpisodes =
       SearchResult.deJson(raw['podcast_episodes'], client, Track.deJson, 'podcast_episode') ?? undefined;
     model.clips = SearchResult.deJson(raw['clips'], client, Clip.deJson, 'clip') ?? undefined;
+    model.banner = SearchBanner.deJson(raw['banner'], client) ?? undefined;
     reportUnknown(client, 'Search', raw, model, ['podcast_episodes']);
     return model;
   }

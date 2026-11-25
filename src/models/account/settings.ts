@@ -186,10 +186,55 @@ export class Experiments extends YandexMusicModel {
   }
 }
 
+/**
+ * The configuration of an experiment group. `title` is common to every
+ * experiment; the remaining keys vary per experiment and are kept in `extra`.
+ */
+export class ExperimentDetailValue extends YandexMusicModel {
+  /** Group name (equals {@link ExperimentDetail.group}). */
+  title?: string;
+  /** Experiment-specific keys other than `title`, verbatim. */
+  extra?: JSONObject;
+
+  /** @see {@link ExperimentDetailValue} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ExperimentDetailValue | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ExperimentDetailValue(client);
+    assign(model, raw, ['title']);
+    const { title: _title, ...rest } = raw;
+    model.extra = rest;
+    return model;
+  }
+}
+
+/** One experiment in the detailed account experiments map. */
+export class ExperimentDetail extends YandexMusicModel {
+  /** Chosen group name. */
+  group?: string;
+  /** Configuration of the chosen group. */
+  value?: ExperimentDetailValue;
+
+  /** @see {@link ExperimentDetail} */
+  static deJson(raw: JSONValue | undefined, client?: Client): ExperimentDetail | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new ExperimentDetail(client);
+    assign(model, raw, ['group']);
+    model.value = ExperimentDetailValue.deJson(raw['value'], client) ?? undefined;
+    reportUnknown(client, 'ExperimentDetail', raw, model);
+    return model;
+  }
+}
+
 /** Detailed A/B experiment configuration for the account. */
 export class ExperimentsDetails extends YandexMusicModel {
   /** The raw detailed experiment map. */
   values?: JSONObject;
+  /** Typed experiments, keyed by experiment name (entries that are not objects are skipped). */
+  experiments?: Record<string, ExperimentDetail>;
 
   /** @see {@link ExperimentsDetails} */
   static deJson(raw: JSONValue | undefined, client?: Client): ExperimentsDetails | null {
@@ -199,6 +244,14 @@ export class ExperimentsDetails extends YandexMusicModel {
     const model = new ExperimentsDetails(client);
     // see Experiments.deJson: whole-map capture, reportUnknown not applicable.
     model.values = raw;
+    const experiments: Record<string, ExperimentDetail> = {};
+    for (const [name, entry] of Object.entries(raw)) {
+      const detail = ExperimentDetail.deJson(entry, client);
+      if (detail) {
+        experiments[name] = detail;
+      }
+    }
+    model.experiments = experiments;
     return model;
   }
 }

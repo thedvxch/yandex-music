@@ -4,13 +4,14 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../base.js';
+import { Tag } from './common.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
 /** The playlists grouped under a tag. */
 export class TagResult extends YandexMusicModel {
-  /** The tag descriptor (free-form raw JSON, pending a typed `Tag` model). */
-  tag?: JSONValue;
+  /** The tag descriptor. */
+  tag?: Tag;
   /** Ids of the tagged playlists (`{uid}:{kind}` strings). */
   ids?: string[];
 
@@ -20,7 +21,8 @@ export class TagResult extends YandexMusicModel {
       return null;
     }
     const model = new TagResult(client);
-    assign(model, raw, ['tag', 'ids']);
+    assign(model, raw, ['ids']);
+    model.tag = Tag.deJson(raw['tag'], client) ?? undefined;
     reportUnknown(client, 'TagResult', raw, model);
     return model;
   }

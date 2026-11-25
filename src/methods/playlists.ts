@@ -38,7 +38,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersSettings(userId?: string | number): Promise<UserSettings | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/settings`;
       const result = await this.request.get(url);
       const settings = isJsonObject(result) ? result['userSettings'] : undefined;
@@ -57,7 +57,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       kind: Array<string | number> | string | number,
       userId?: string | number,
     ): Promise<Playlist | Playlist[] | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       if (Array.isArray(kind)) {
         const url = `${this.baseUrl}/users/${uid}/playlists`;
         const result = await this.request.post(url, { kinds: kind });
@@ -78,7 +78,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       kind: string | number,
       userId?: string | number,
     ): Promise<PlaylistRecommendations | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}/recommendations`, PlaylistRecommendations.deJson);
     }
 
@@ -96,7 +96,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       visibility: PlaylistVisibility = 'public',
       userId?: string | number,
     ): Promise<Playlist | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/playlists/create`;
       const result = await this.request.post(url, { title, visibility });
       return Playlist.deJson(result, this as unknown as Client);
@@ -111,7 +111,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersPlaylistsDelete(kind: string | number, userId?: string | number): Promise<boolean> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/delete`;
       const result = await this.request.post(url);
       return result === 'ok';
@@ -131,7 +131,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       name: string,
       userId?: string | number,
     ): Promise<Playlist | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/name`;
       const result = await this.request.post(url, { value: name });
       return Playlist.deJson(result, this as unknown as Client);
@@ -151,7 +151,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       visibility: PlaylistVisibility,
       userId?: string | number,
     ): Promise<Playlist | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/visibility`;
       const result = await this.request.post(url, { value: visibility });
       return Playlist.deJson(result, this as unknown as Client);
@@ -171,7 +171,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       description: string,
       userId?: string | number,
     ): Promise<Playlist | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/description`;
       const result = await this.request.post(url, { value: description });
       return Playlist.deJson(result, this as unknown as Client);
@@ -182,7 +182,8 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      *
      * @param kind - The playlist kind.
      * @param diff - The serialized diff (see {@link Difference}).
-     * @param revision - The playlist revision. Defaults to `1`.
+     * @param revision - The playlist revision. When omitted, the current revision is fetched first
+     *   (falling back to `1`).
      * @param userId - Owner user id. Defaults to the authenticated account.
      * @returns The updated playlist, or `null`.
      * @throws {YandexMusicError} On any transport or API error.
@@ -190,10 +191,14 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
     async usersPlaylistsChange(
       kind: string | number,
       diff: string,
-      revision = 1,
+      revision?: number,
       userId?: string | number,
     ): Promise<Playlist | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
+      if (revision === undefined) {
+        const current = await this.usersPlaylists(kind, uid);
+        revision = (Array.isArray(current) ? undefined : current?.revision) ?? 1;
+      }
       const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/change`;
       const result = await this.request.post(url, { kind, revision, diff });
       return Playlist.deJson(result, this as unknown as Client);
@@ -206,7 +211,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @param trackId - The track id to insert.
      * @param albumId - The album the track belongs to.
      * @param at - The insertion index. Defaults to `0`.
-     * @param revision - The playlist revision. Defaults to `1`.
+     * @param revision - The playlist revision. When omitted, the current revision is fetched.
      * @param userId - Owner user id. Defaults to the authenticated account.
      * @returns The updated playlist, or `null`.
      * @throws {YandexMusicError} On any transport or API error.
@@ -216,7 +221,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       trackId: string | number,
       albumId: string | number,
       at = 0,
-      revision = 1,
+      revision?: number,
       userId?: string | number,
     ): Promise<Playlist | null> {
       const diff = new Difference().addInsert(at, { id: trackId, albumId }).toJson();
@@ -229,7 +234,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @param kind - The playlist kind.
      * @param from - Start index (inclusive).
      * @param to - End index (exclusive).
-     * @param revision - The playlist revision. Defaults to `1`.
+     * @param revision - The playlist revision. When omitted, the current revision is fetched.
      * @param userId - Owner user id. Defaults to the authenticated account.
      * @returns The updated playlist, or `null`.
      * @throws {YandexMusicError} On any transport or API error.
@@ -238,7 +243,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       kind: string | number,
       from: number,
       to: number,
-      revision = 1,
+      revision?: number,
       userId?: string | number,
     ): Promise<Playlist | null> {
       const diff = new Difference().addDelete(from, to).toJson();
@@ -268,7 +273,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersPlaylistsList(userId?: string | number): Promise<Playlist[]> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/playlists/list`;
       const result = await this.request.get(url);
       return deList(Playlist.deJson, result, this as unknown as Client);
@@ -352,7 +357,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       kind: string | number,
       userId?: string | number,
     ): Promise<PlaylistTrailer | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}/trailer`, PlaylistTrailer.deJson);
     }
 
@@ -364,7 +369,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersPlaylistsKinds(userId?: string | number): Promise<number[]> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/playlists/list/kinds`;
       const result = await this.request.get(url);
       return Array.isArray(result) ? (result.filter((x) => typeof x === 'number') as number[]) : [];

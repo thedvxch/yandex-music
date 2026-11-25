@@ -9,7 +9,6 @@ import {
   DEFAULT_DEVICE,
   USER_AGENT,
   Request,
-  BadRequestError,
   ConflictError,
   DeviceAuthError,
   NetworkError,
@@ -137,7 +136,7 @@ describe('status → error class mapping', () => {
 
   test('unmapped status falls back to NetworkError with the code appended', async () => {
     const r = reqWith('{}', 500);
-    await expect(r.get('http://x')).rejects.toThrow(/\(500\)$/);
+    await expect(r.get('http://x')).rejects.toThrow(/^HTTP 500$/);
     await expect(reqWith('{}', 500).get('http://x')).rejects.toBeInstanceOf(NetworkError);
   });
 });

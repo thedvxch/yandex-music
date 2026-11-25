@@ -10,6 +10,12 @@ import { Artist } from '../models/artist/artist.js';
 import { ClipsWillLike } from '../models/clip.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
+import type { Params } from '../request.js';
+
+/** Query for the `if-modified-since-revision` option (omitted when unset). */
+function revisionParams(revision?: number): Params | undefined {
+  return revision === undefined ? undefined : { 'if-modified-since-revision': revision };
+}
 
 /** Entity type that can be liked. */
 export type LikeableType = 'track' | 'artist' | 'album' | 'playlist';
@@ -35,7 +41,7 @@ async function dislikeAction(
   remove: boolean,
   userId?: string | number,
 ): Promise<boolean> {
-  const uid = userId ?? self.accountUid;
+  const uid = self.resolveUid(userId);
   const action = remove ? 'remove' : 'add-multiple';
   const url = `${self.baseUrl}/users/${uid}/dislikes/${objectType}s/${action}`;
   const result = await self.request.post(url, { [`${objectType}-ids`]: ids });
@@ -63,7 +69,7 @@ async function likeAction(
   remove: boolean,
   userId?: string | number,
 ): Promise<boolean> {
-  const uid = userId ?? self.accountUid;
+  const uid = self.resolveUid(userId);
   const action = remove ? 'remove' : 'add-multiple';
   const url = `${self.baseUrl}/users/${uid}/likes/${objectType}s/${action}`;
   const result = await self.request.post(url, { [`${objectType}-ids`]: ids });
@@ -192,13 +198,14 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * Fetch the user's liked tracks.
      *
      * @param userId - Target user id. Defaults to the authenticated account.
+     * @param ifModifiedSinceRevision - Only return data when the library revision is newer than this.
      * @returns The liked-tracks library, or `null`.
      * @throws {YandexMusicError} On any transport or API error.
      */
-    async usersLikesTracks(userId?: string | number): Promise<TracksList | null> {
-      const uid = userId ?? this.accountUid;
+    async usersLikesTracks(userId?: string | number, ifModifiedSinceRevision?: number): Promise<TracksList | null> {
+      const uid = this.resolveUid(userId);
       const url = `${this.baseUrl}/users/${uid}/likes/tracks`;
-      const result = await this.request.get(url);
+      const result = await this.request.get(url, revisionParams(ifModifiedSinceRevision));
       const library = isJsonObject(result) ? result['library'] : undefined;
       return TracksList.deJson(library, this as unknown as Client);
     }
@@ -207,12 +214,15 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * Fetch the user's liked albums.
      *
      * @param userId - Target user id. Defaults to the authenticated account.
+     * @param rich - Request full album objects. Defaults to `true`.
      * @returns The liked albums.
      * @throws {YandexMusicError} On any transport or API error.
      */
-    async usersLikesAlbums(userId?: string | number): Promise<Like[]> {
-      const uid = userId ?? this.accountUid;
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/albums`);
+    async usersLikesAlbums(userId?: string | number, rich = true): Promise<Like[]> {
+      const uid = this.resolveUid(userId);
+      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/albums`, {
+        rich: String(rich),
+      });
       return deList(Like.deJson, result, this as unknown as Client);
     }
 
@@ -226,9 +236,27 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersLikesArtists(userId?: string | number): Promise<Artist[]> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/artists`);
-      return deList(Artist.deJson, result, this as unknown as Client);
+      const items = Array.isArray(result)
+        ? result.map((item) => (isJsonObject(item) && isJsonObject(item['artist']) ? item['artist'] : item))
+        : result;
+      return deList(Artist.deJson, items, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the user's liked artists together with the time each was liked.
+     *
+     * @param userId - Target user id. Defaults to the authenticated account.
+     * @returns One {@link Like} (`type: 'artist'`) per liked artist.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async usersLikesArtistsWithTimestamps(userId?: string | number): Promise<Like[]> {
+      const uid = this.resolveUid(userId);
+      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/artists`, {
+        'with-timestamps': 'true',
+      });
+      return Like.deListTyped(result, this as unknown as Client, 'artist');
     }
 
     /**
@@ -239,7 +267,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersLikesPlaylists(userId?: string | number): Promise<Like[]> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/playlists`);
       return deList(Like.deJson, result, this as unknown as Client);
     }
@@ -248,12 +276,16 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * Fetch the user's disliked tracks.
      *
      * @param userId - Target user id. Defaults to the authenticated account.
+     * @param ifModifiedSinceRevision - Only return data when the library revision is newer than this.
      * @returns The disliked-tracks library, or `null`.
      * @throws {YandexMusicError} On any transport or API error.
      */
-    async usersDislikesTracks(userId?: string | number): Promise<TracksList | null> {
-      const uid = userId ?? this.accountUid;
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/dislikes/tracks`);
+    async usersDislikesTracks(userId?: string | number, ifModifiedSinceRevision?: number): Promise<TracksList | null> {
+      const uid = this.resolveUid(userId);
+      const result = await this.request.get(
+        `${this.baseUrl}/users/${uid}/dislikes/tracks`,
+        revisionParams(ifModifiedSinceRevision),
+      );
       const library = isJsonObject(result) ? result['library'] : undefined;
       return TracksList.deJson(library, this as unknown as Client);
     }
@@ -296,7 +328,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersDislikesArtists(userId?: string | number): Promise<Artist[]> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/dislikes/artists`);
       return deList(Artist.deJson, result, this as unknown as Client);
     }
@@ -339,7 +371,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersLikesClips(userId?: string | number, page = 0, pageSize = 20): Promise<ClipsWillLike | null> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/clips`, {
         page,
         pageSize,
@@ -356,8 +388,10 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersLikesClipsAdd(clipId: string | number, userId?: string | number): Promise<boolean> {
-      const uid = userId ?? this.accountUid;
-      const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/add`, { 'clip-id': clipId });
+      const uid = this.resolveUid(userId);
+      const result = await this.request.send('POST', `${this.baseUrl}/users/${uid}/likes/clips/add`, {
+        params: { 'clip-id': clipId },
+      });
       // Unlike every sibling like/dislike action, this endpoint's success response
       // shape isn't confirmed to be the bare string 'ok' — kept object-tolerant to
       // avoid reporting a false failure until that's verified against a live API.
@@ -373,7 +407,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersLikesClipsRemove(clipId: string | number, userId?: string | number): Promise<boolean> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/${clipId}/remove`);
       // See usersLikesClipsAdd — response shape unconfirmed, kept object-tolerant.
       return result === 'ok' || isJsonObject(result);

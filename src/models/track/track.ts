@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { User } from '../user.js';
 import { CoverDerivedColors } from '../common.js';
 import { Fade, LyricsInfo, Major, MetaData, Normalization, PoetryLoverMatch, R128, SmartPreviewParams } from './nested.js';
 // Value imports despite the import cycle (track ↔ artist ↔ album): the cyclic
@@ -12,7 +13,8 @@ import { Fade, LyricsInfo, Major, MetaData, Normalization, PoetryLoverMatch, R12
 import { Artist } from '../artist/artist.js';
 import { Album } from '../album/album.js';
 import { Chart } from '../landing/landing.js';
-import type { DownloadInfo, LosslessDownloadInfo, SimilarTracks, TrackFullInfo, TrackLyrics } from './extras.js';
+import type { DownloadInfo, FileInfo, LosslessDownloadInfo, SimilarTracks, TrackFullInfo, TrackLyrics } from './extras.js';
+import type { FileInfoOptions } from '../../methods/tracks.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -127,6 +129,16 @@ export class Track extends YandexMusicModel {
   pubDate?: string;
   /** Chart standing, present when the track comes from a chart context. */
   chart?: Chart;
+  /** Crossfade timings used when mixing into the next radio track. */
+  mixFade?: Fade;
+  /** Clip ids associated with the track. */
+  clipIds?: number[];
+  /** International Standard Recording Code. */
+  isrc?: string;
+  /** Artist name of a user-generated track. */
+  ugcArtistName?: string;
+  /** Uploader of the track (user-uploaded tracks only). */
+  userInfo?: User;
 
   /**
    * Deserialize a {@link Track}.
@@ -179,6 +191,9 @@ export class Track extends YandexMusicModel {
       'playerId',
       'podcastEpisodeType',
       'pubDate',
+      'clipIds',
+      'isrc',
+      'ugcArtistName',
     ]);
     model.artists = deList(Artist.deJson, raw['artists'], client);
     model.albums = deList(Album.deJson, raw['albums'], client);
@@ -194,14 +209,16 @@ export class Track extends YandexMusicModel {
     model.smartPreviewParams = SmartPreviewParams.deJson(raw['smartPreviewParams'], client) ?? undefined;
     model.r128 = R128.deJson(raw['r128'], client) ?? undefined;
     model.chart = Chart.deJson(raw['chart'], client) ?? undefined;
+    model.mixFade = Fade.deJson(raw['mixFade'], client) ?? undefined;
+    model.userInfo = User.deJson(raw['userInfo'], client) ?? undefined;
     reportUnknown(client, 'Track', raw, model);
     return model;
   }
 
   /**
-   * Resolve the numeric portion of this track's id (drops any `:album` suffix).
+   * Resolve this track's id.
    *
-   * @returns The track id as-is, suitable for passing to API methods.
+   * @returns The track id as-is (any `:album` suffix is kept), suitable for passing to API methods.
    * @throws {Error} When the track has no id.
    */
   trackId(): string | number {
@@ -230,6 +247,17 @@ export class Track extends YandexMusicModel {
    */
   getLosslessInfo(quality = 'lossless'): Promise<LosslessDownloadInfo | null> {
     return this.requireClient().tracksLosslessInfo(this.trackId(), quality);
+  }
+
+  /**
+   * Fetch file info for this track via `/get-file-info` (reference-library parity).
+   *
+   * @param options - Quality, codecs, transport (default `raw`) and signing overrides.
+   * @returns The file info, or `null`. See {@link FileInfo}.
+   * @throws {YandexMusicError} On any transport or API error.
+   */
+  getFileInfo(options?: FileInfoOptions): Promise<FileInfo | null> {
+    return this.requireClient().tracksFileInfo(this.trackId(), options);
   }
 
   /**

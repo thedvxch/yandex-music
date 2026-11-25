@@ -42,19 +42,17 @@ const ComposedClient = AccountMixin(
                 QueueMixin(
                   MusicHistoryMixin(
                     ConcertsMixin(
-                    ClipsMixin(
-                      CreditsMixin(
-                        DisclaimersMixin(
-                          LabelsMixin(
-                            MetatagsMixin(
-                              PinsMixin(
-                                PresavesMixin(LikesMixin(DeviceAuthMixin(ClientBase))),
+                      ClipsMixin(
+                        CreditsMixin(
+                          DisclaimersMixin(
+                            LabelsMixin(
+                              MetatagsMixin(
+                                PinsMixin(PresavesMixin(LikesMixin(DeviceAuthMixin(ClientBase)))),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
                     ),
                   ),
                 ),

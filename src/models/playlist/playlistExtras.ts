@@ -7,6 +7,7 @@
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { Track } from '../track/track.js';
+import { SimilarEntityItem } from '../wave.js';
 import { TrailerInfo } from '../trailerInfo.js';
 import { Playlist } from './playlist.js';
 import type { Client } from '../../client.js';
@@ -34,8 +35,8 @@ export class PlaylistRecommendations extends YandexMusicModel {
 
 /** Entities similar to a playlist. */
 export class PlaylistSimilarEntities extends YandexMusicModel {
-  /** Similar entity items (raw JSON, pending a typed `SimilarEntityItem` model). */
-  items?: JSONValue[];
+  /** Similar entity items. */
+  items?: SimilarEntityItem[];
 
   /** @see {@link PlaylistSimilarEntities} */
   static deJson(raw: JSONValue | undefined, client?: Client): PlaylistSimilarEntities | null {
@@ -43,7 +44,7 @@ export class PlaylistSimilarEntities extends YandexMusicModel {
       return null;
     }
     const model = new PlaylistSimilarEntities(client);
-    model.items = Array.isArray(raw['items']) ? (raw['items'] as JSONValue[]) : undefined;
+    model.items = Array.isArray(raw['items']) ? deList(SimilarEntityItem.deJson, raw['items'], client) : undefined;
     reportUnknown(client, 'PlaylistSimilarEntities', raw, model);
     return model;
   }

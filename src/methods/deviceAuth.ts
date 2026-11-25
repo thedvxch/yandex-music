@@ -50,6 +50,18 @@ function randomDeviceId(): string {
   return id;
 }
 
+/** Removes the music-API auth headers the transport adds by default (OAuth endpoints must not receive them). */
+const OAUTH_HEADERS: Record<string, string | null> = { Authorization: null, 'X-Yandex-Music-Client': null };
+
+/** Extra seconds added to the polling interval on `slow_down` (RFC 8628, section 3.5). */
+const SLOW_DOWN_STEP_MS = 5000;
+
+/** Result of a single device-token poll: the token, or why there is none yet. */
+export type PollOutcome = OAuthToken | 'pending' | 'slow_down';
+
+const hasOAuthError = (error: unknown, name: string): boolean =>
+  error instanceof BadRequestError && (error.code === name || error.message.includes(name));
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -72,11 +84,16 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
      * @throws {YandexMusicError} On any transport or API error.
      */
     async requestDeviceCode(deviceId?: string, deviceName?: string, clientId?: string): Promise<DeviceCode> {
-      const result = await this.request.post(`${OAUTH_BASE_URL}/device/code`, {
-        client_id: clientId ?? DEFAULT_CLIENT_ID,
-        device_id: deviceId ?? randomDeviceId(),
-        device_name: deviceName ?? DEFAULT_DEVICE_NAME,
-      });
+      const result = await this.request.post(
+        `${OAUTH_BASE_URL}/device/code`,
+        {
+          client_id: clientId ?? DEFAULT_CLIENT_ID,
+          device_id: deviceId ?? randomDeviceId(),
+          device_name: deviceName ?? DEFAULT_DEVICE_NAME,
+        },
+        undefined,
+        OAUTH_HEADERS,
+      );
       const code = DeviceCode.deJson(result, this as unknown as Client);
       if (!code) {
         throw new DeviceAuthError('failed to parse device code response');
@@ -99,17 +116,43 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
       clientId?: string,
       clientSecret?: string,
     ): Promise<OAuthToken | null> {
+      const outcome = await this.pollDeviceTokenOnce(deviceCode, clientId, clientSecret);
+      return typeof outcome === 'string' ? null : outcome;
+    }
+
+    /**
+     * Poll once and report why there is no token yet (`pending` or `slow_down`).
+     *
+     * @internal Used by {@link deviceAuth}; not part of the public API.
+     */
+    async pollDeviceTokenOnce(
+      deviceCode: string,
+      clientId?: string,
+      clientSecret?: string,
+    ): Promise<PollOutcome> {
       try {
-        const result = await this.request.post(`${OAUTH_BASE_URL}/token`, {
-          grant_type: 'device_code',
-          code: deviceCode,
-          client_id: clientId ?? DEFAULT_CLIENT_ID,
-          client_secret: clientSecret ?? DEFAULT_CLIENT_SECRET,
-        });
-        return OAuthToken.deJson(result, this as unknown as Client);
+        const result = await this.request.post(
+          `${OAUTH_BASE_URL}/token`,
+          {
+            grant_type: 'device_code',
+            code: deviceCode,
+            client_id: clientId ?? DEFAULT_CLIENT_ID,
+            client_secret: clientSecret ?? DEFAULT_CLIENT_SECRET,
+          },
+          undefined,
+          OAUTH_HEADERS,
+        );
+        const token = OAuthToken.deJson(result, this as unknown as Client);
+        if (!token) {
+          throw new DeviceAuthError('failed to parse token response');
+        }
+        return token;
       } catch (error) {
-        if (error instanceof BadRequestError && error.message.includes('authorization_pending')) {
-          return null;
+        if (hasOAuthError(error, 'authorization_pending')) {
+          return 'pending';
+        }
+        if (hasOAuthError(error, 'slow_down')) {
+          return 'slow_down';
         }
         throw error instanceof BadRequestError ? new DeviceAuthError(error.message) : error;
       }
@@ -137,12 +180,17 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
     ): Promise<OAuthToken> {
       let token: OAuthToken | null;
       try {
-        const result = await this.request.post(`${OAUTH_BASE_URL}/token`, {
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
-          client_id: clientId ?? DEFAULT_CLIENT_ID,
-          client_secret: clientSecret ?? DEFAULT_CLIENT_SECRET,
-        });
+        const result = await this.request.post(
+          `${OAUTH_BASE_URL}/token`,
+          {
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+            client_id: clientId ?? DEFAULT_CLIENT_ID,
+            client_secret: clientSecret ?? DEFAULT_CLIENT_SECRET,
+          },
+          undefined,
+          OAUTH_HEADERS,
+        );
         token = OAuthToken.deJson(result, this as unknown as Client);
       } catch (error) {
         throw error instanceof BadRequestError ? new DeviceAuthError(error.message) : error;
@@ -167,7 +215,7 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
       const code = await this.requestDeviceCode(options.deviceId, options.deviceName, options.clientId);
       await onCode(code);
 
-      const intervalMs = (options.pollInterval ?? code.interval ?? 5) * 1000;
+      let intervalMs = (options.pollInterval ?? code.interval ?? 5) * 1000;
       const lifetimeMs = (options.timeout ?? code.expiresIn ?? 0) * 1000;
       const deadline = lifetimeMs > 0 ? Date.now() + lifetimeMs : Number.POSITIVE_INFINITY;
 
@@ -175,12 +223,19 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
         if (options.shouldCancel?.()) {
           throw new DeviceAuthError('device authorization cancelled');
         }
-        if (Date.now() > deadline) {
-          throw new DeviceAuthError('device authorization timed out');
+        if (Date.now() >= deadline) {
+          throw new DeviceAuthError('device authorization expired');
         }
-        const token = await this.pollDeviceToken(code.deviceCode ?? '', options.clientId, options.clientSecret);
-        if (token) {
-          return token;
+        const outcome = await this.pollDeviceTokenOnce(code.deviceCode ?? '', options.clientId, options.clientSecret);
+        if (typeof outcome !== 'string') {
+          return outcome;
+        }
+        if (outcome === 'slow_down') {
+          intervalMs += SLOW_DOWN_STEP_MS;
+        }
+        // The next poll would fall at or past the deadline: stop now instead of sleeping for nothing.
+        if (Date.now() + intervalMs >= deadline) {
+          throw new DeviceAuthError('device authorization expired');
         }
         await sleep(intervalMs);
       }

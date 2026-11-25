@@ -5,6 +5,7 @@
  */
 import { ClientBase } from '../clientBase.js';
 import { deList } from '../base.js';
+import { BadRequestError } from '../exceptions.js';
 import { Search, SearchHistoryItem, SearchInstant, Suggestions } from '../models/search/search.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
@@ -72,6 +73,9 @@ export function SearchMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
         page,
         'playlist-in-best': String(playlistInBest),
       });
+      if (typeof result === 'string') {
+        throw new BadRequestError(result);
+      }
       return Search.deJson(result, this as unknown as Client);
     }
 
@@ -131,7 +135,7 @@ export function SearchMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersSearchHistory(userId?: string | number): Promise<SearchHistoryItem[]> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/search-history`);
       return deList(SearchHistoryItem.deJson, result, this as unknown as Client);
     }
@@ -144,7 +148,7 @@ export function SearchMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async usersSearchHistoryClear(userId?: string | number): Promise<boolean> {
-      const uid = userId ?? this.accountUid;
+      const uid = this.resolveUid(userId);
       const result = await this.request.get(`${this.baseUrl}/users/${uid}/search-history/clear`);
       return result === 'ok';
     }

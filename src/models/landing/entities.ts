@@ -120,3 +120,37 @@ export class MixLink extends YandexMusicModel {
     return model;
   }
 }
+
+/** The `data` of a `personal-playlists` landing {@link Block}. */
+export class PersonalPlaylistsData extends YandexMusicModel {
+  /** Whether the onboarding wizard has been completed. */
+  isWizardPassed?: boolean;
+
+  /** @see {@link PersonalPlaylistsData} */
+  static deJson(raw: JSONValue | undefined, client?: Client): PersonalPlaylistsData | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new PersonalPlaylistsData(client);
+    assign(model, raw, ['isWizardPassed']);
+    reportUnknown(client, 'PersonalPlaylistsData', raw, model);
+    return model;
+  }
+}
+
+/** The `data` of a `play-contexts` landing {@link Block}. */
+export class PlayContextsData extends YandexMusicModel {
+  /** Other recently played tracks. */
+  otherTracks?: TrackShortOld[];
+
+  /** @see {@link PlayContextsData} */
+  static deJson(raw: JSONValue | undefined, client?: Client): PlayContextsData | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new PlayContextsData(client);
+    model.otherTracks = deList(TrackShortOld.deJson, raw['otherTracks'], client);
+    reportUnknown(client, 'PlayContextsData', raw, model);
+    return model;
+  }
+}

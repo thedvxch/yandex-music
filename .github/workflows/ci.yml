@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm run typecheck:examples
       - run: npm test
       # tsdown (build tool) needs Node >= 22.18; the published bundle still runs on Node 20.

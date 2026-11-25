@@ -2,14 +2,17 @@
  * Listening-history models (`/music-history`).
  *
  * @remarks
- * The polymorphic `fullModel` of a history item (either a {@link Track} or a
- * context model) is exposed as raw JSON; the structural path used in practice —
- * {@link MusicHistory.historyTabs} → groups → items → {@link MusicHistoryItemId} —
- * is fully typed.
+ * The polymorphic `fullModel` of a history item is a {@link Track} for `track`
+ * items and a {@link MusicHistoryContextFullModel} for every other type.
  *
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { Track } from '../track/track.js';
+import { Album } from '../album/album.js';
+import { Artist } from '../artist/artist.js';
+import { Playlist } from '../playlist/playlist.js';
+import { Wave } from '../wave.js';
 import type { Client } from '../../client.js';
 import type { JSONValue } from '../../types.js';
 
@@ -40,20 +43,61 @@ export class MusicHistoryItemId extends YandexMusicModel {
   }
 }
 
+/** The full context model of a non-track history item (album, artist, playlist or wave). */
+export class MusicHistoryContextFullModel extends YandexMusicModel {
+  /** The album, for album contexts. */
+  album?: Album;
+  /** The artist, for artist contexts. */
+  artist?: Artist;
+  /** The playlist, for playlist contexts. */
+  playlist?: Playlist;
+  /** The wave, for wave contexts. */
+  wave?: Wave;
+  /** The artists of the context. */
+  artists?: Artist[];
+  /** Whether the context is available. */
+  available?: boolean;
+  /** Number of tracks in the context. */
+  tracksCount?: number;
+  /** Foreground image URL of a simple wave. */
+  simpleWaveForegroundImageUrl?: string;
+  /** Background color of a simple wave. */
+  simpleWaveBackgroundColor?: string;
+
+  /** @see {@link MusicHistoryContextFullModel} */
+  static deJson(raw: JSONValue | undefined, client?: Client): MusicHistoryContextFullModel | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new MusicHistoryContextFullModel(client);
+    assign(model, raw, ['available', 'tracksCount', 'simpleWaveForegroundImageUrl', 'simpleWaveBackgroundColor']);
+    model.album = Album.deJson(raw['album'], client) ?? undefined;
+    model.artist = Artist.deJson(raw['artist'], client) ?? undefined;
+    model.playlist = Playlist.deJson(raw['playlist'], client) ?? undefined;
+    model.wave = Wave.deJson(raw['wave'], client) ?? undefined;
+    model.artists = deList(Artist.deJson, raw['artists'], client);
+    reportUnknown(client, 'MusicHistoryContextFullModel', raw, model);
+    return model;
+  }
+}
+
 /** The payload of a single history item. */
 export class MusicHistoryItemData extends YandexMusicModel {
   /** The item identifiers. */
   itemId?: MusicHistoryItemId;
-  /** The full entity (a {@link Track} or context model) as raw JSON. */
-  fullModel?: JSONValue;
+  /** The full entity: a {@link Track} for `track` items, otherwise a {@link MusicHistoryContextFullModel}. */
+  fullModel?: Track | MusicHistoryContextFullModel;
 
   /** @see {@link MusicHistoryItemData} */
-  static deJson(raw: JSONValue | undefined, client?: Client): MusicHistoryItemData | null {
+  static deJson(raw: JSONValue | undefined, client?: Client, itemType?: string): MusicHistoryItemData | null {
     if (!isJsonObject(raw)) {
       return null;
     }
     const model = new MusicHistoryItemData(client);
-    assign(model, raw, ['fullModel']);
+    model.fullModel =
+      (itemType === 'track'
+        ? Track.deJson(raw['fullModel'], client)
+        : MusicHistoryContextFullModel.deJson(raw['fullModel'], client)) ?? undefined;
     model.itemId = MusicHistoryItemId.deJson(raw['itemId'], client) ?? undefined;
     reportUnknown(client, 'MusicHistoryItemData', raw, model);
     return model;
@@ -74,7 +118,7 @@ export class MusicHistoryItem extends YandexMusicModel {
     }
     const model = new MusicHistoryItem(client);
     assign(model, raw, ['type']);
-    model.data = MusicHistoryItemData.deJson(raw['data'], client) ?? undefined;
+    model.data = MusicHistoryItemData.deJson(raw['data'], client, model.type) ?? undefined;
     reportUnknown(client, 'MusicHistoryItem', raw, model);
     return model;
   }

@@ -4,13 +4,15 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { Cover, CoverDerivedColors } from '../common.js';
+import { Cover, CoverDerivedColors, Tag } from '../common.js';
 import { Pager } from '../pager.js';
 import { User } from '../user.js';
 import { TrackId, TrackShort } from '../trackShort.js';
 import { Artist } from '../artist/artist.js';
+import { AlbumActionButton } from '../album/album.js';
 import {
   MadeFor,
+  MadeForUser,
   PlayCounter,
   PlaylistAbsence,
   OpenGraphData,
@@ -45,7 +47,7 @@ export class Playlist extends YandexMusicModel {
   /** Number of tracks. */
   trackCount?: number;
   /** Tags. */
-  tags?: JSONValue[];
+  tags?: Tag[];
   /** Revision number. */
   revision?: number;
   /** Snapshot number. */
@@ -142,8 +144,24 @@ export class Playlist extends YandexMusicModel {
   regions?: JSONValue[];
   /** Artist-playlist kind, when this is an artist's playlist. */
   artistPlaylistType?: string;
-  /** Call-to-action button (free-form raw JSON, pending a typed model). */
-  actionButton?: JSONValue;
+  /** Call-to-action button. */
+  actionButton?: AlbumActionButton;
+  /** Whether the playlist is children's content. */
+  childContent?: boolean;
+  /** Marker that the playlist is personalised for the current user. */
+  madeForUser?: MadeForUser;
+  /** Placeholder description. */
+  dummyDescription?: string;
+  /** Placeholder page description. */
+  dummyPageDescription?: string;
+  /** Placeholder cover. */
+  dummyCover?: Cover;
+  /** Placeholder rollover cover. */
+  dummyRolloverCover?: Cover;
+  /** Pre-roll items played before the playlist (raw JSON). */
+  prerolls?: JSONValue[];
+  /** Origin marker for `from` parameters (raw JSON, semantics unknown). */
+  isForFrom?: JSONValue;
 
   /** @see {@link Playlist} */
   static deJson(raw: JSONValue | undefined, client?: Client): Playlist | null {
@@ -156,7 +174,6 @@ export class Playlist extends YandexMusicModel {
       'kind',
       'title',
       'trackCount',
-      'tags',
       'revision',
       'snapshot',
       'visibility',
@@ -192,8 +209,17 @@ export class Playlist extends YandexMusicModel {
       'backgroundImageUrl',
       'regions',
       'artistPlaylistType',
-      'actionButton',
+      'childContent',
+      'dummyDescription',
+      'dummyPageDescription',
+      'prerolls',
+      'isForFrom',
     ]);
+    model.tags = deList(Tag.deJson, raw['tags'], client);
+    model.actionButton = AlbumActionButton.deJson(raw['actionButton'], client) ?? undefined;
+    model.madeForUser = MadeForUser.deJson(raw['madeForUser'], client) ?? undefined;
+    model.dummyCover = Cover.deJson(raw['dummyCover'], client) ?? undefined;
+    model.dummyRolloverCover = Cover.deJson(raw['dummyRolloverCover'], client) ?? undefined;
     model.owner = User.deJson(raw['owner'], client) ?? undefined;
     model.cover = Cover.deJson(raw['cover'], client) ?? undefined;
     model.coverWithoutText = Cover.deJson(raw['coverWithoutText'], client) ?? undefined;

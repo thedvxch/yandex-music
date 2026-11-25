@@ -6,7 +6,6 @@
 import { ClientBase } from '../clientBase.js';
 import { Credits } from '../models/credit.js';
 import type { AbstractConstructor } from './mixin.js';
-import type { Client } from '../client.js';
 
 /**
  * Adds production-credits endpoints to the client.
@@ -25,8 +24,7 @@ export function CreditsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksCredits(trackId: string | number): Promise<Credits | null> {
-      const result = await this.request.get(`${this.baseUrl}/tracks/${trackId}/credits`);
-      return Credits.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/tracks/${trackId}/credits`, Credits.deJson);
     }
 
     /**
@@ -37,8 +35,7 @@ export function CreditsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async clipsCredits(clipId: string | number): Promise<Credits | null> {
-      const result = await this.request.get(`${this.baseUrl}/clips/${clipId}/credits`);
-      return Credits.deJson(result, this as unknown as Client);
+      return this.getModel(`${this.baseUrl}/clips/${clipId}/credits`, Credits.deJson);
     }
   }
 

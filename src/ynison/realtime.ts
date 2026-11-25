@@ -11,12 +11,20 @@
  * @packageDocumentation
  */
 import { EventEmitter } from 'node:events';
-import { YnisonError } from '../exceptions.js';
+import {
+  YnisonConnectionClosedError,
+  YnisonDeviceDisplacedError,
+  YnisonError,
+  YnisonServerError,
+  YnisonUnauthorizedError,
+} from '../exceptions.js';
 import { YnisonClient } from './client.js';
-import type { YnisonState } from './client.js';
+import type { YnisonClientOptions, YnisonState } from './client.js';
 import { generateDeviceId } from './messages.js';
 import type { DeviceInfoOverride } from './messages.js';
 import type { Track } from '../models/track/track.js';
+
+const DEFAULT_BACKOFF_MS = [0, 1000, 5000, 30_000];
 
 /** Compute the live playback position, extrapolating from the last server timestamp. */
 export function liveProgressMs(state: YnisonState): number {
@@ -75,8 +83,8 @@ export interface RealtimeEvents {
   /** The session went silent past `staleTimeoutMs` and is being torn down; the
    * argument is how long (ms) no frame had arrived. */
   stale: [number];
-  /** The client stopped and will not reconnect. */
-  close: [];
+  /** The client stopped and will not reconnect. The argument is the terminal error that ended the loop, if any (see {@link RealtimeClient.terminalError}). */
+  close: [terminalError?: Error | null];
 }
 
 /** Options for {@link RealtimeClient}. */
@@ -94,10 +102,19 @@ export interface RealtimeOptions {
   deviceInfo?: DeviceInfoOverride | null;
   /** Whether to reconnect automatically. Defaults to `true`. */
   reconnect?: boolean;
-  /** Initial reconnect backoff in ms. Defaults to `1000`. */
+  /**
+   * Minimum reconnect delay in ms. Unset by default: the delay then follows the
+   * schedule `[0, 1000, 5000, 30000]` (or the ladder the server sent) plus 0-250 ms
+   * of jitter.
+   */
   reconnectBaseMs?: number;
-  /** Maximum reconnect backoff in ms. Defaults to `30000`. */
+  /** Cap for the reconnect delay (schedule and server ladder) in ms. Defaults to `30000`. */
   reconnectMaxMs?: number;
+  /**
+   * Extra options passed to every {@link YnisonClient} (`redirectUrl`, `stateUrl`,
+   * `connectTimeoutMs`). `token`, `deviceId` and `deviceInfo` are set by this client.
+   */
+  ynison?: Partial<YnisonClientOptions>;
   /**
    * Maximum delay (ms) to honour from a server "go-away" frame before retrying.
    * Defaults to `60000`. Ynison sometimes answers "temporary unavailable" with a
@@ -121,11 +138,16 @@ export interface RealtimeOptions {
    * answers with rate-limiting and host rebalancing.
    */
   staleTimeoutMs?: number;
+  /**
+   * A session counts as stable once it stayed open this many ms (default `5000`):
+   * only then the reconnect attempt counter and a server backoff ladder are reset.
+   * After a shorter session the next reconnect waits at least 1000 ms, so a server
+   * that accepts and immediately drops the socket is not hammered.
+   */
+  stableSessionMs?: number;
   /** Optional resolver mapping a playable id to a {@link Track} for `trackChange`. */
   resolveTrack?: (playableId: string) => Promise<Track | null>;
 }
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * A reconnecting, event-emitting realtime client for Ynison player state.
@@ -149,6 +171,8 @@ export class RealtimeClient extends EventEmitter {
   private lastPlayableId: string | null = null;
   private lastPaused: boolean | null = null;
   private attempt = 0;
+  /** The terminal error that ended the loop, if any. */
+  private terminal: Error | null = null;
   /** Last received state frame, for the synchronous {@link nowPlaying} snapshot. */
   private lastState: YnisonState | null = null;
   /** Last resolved track (when a resolver is configured). */
@@ -163,6 +187,10 @@ export class RealtimeClient extends EventEmitter {
   private resolveSeq = 0;
   /** Resolves the backoff sleep immediately when stop() is called. */
   private stopResolve: (() => void) | null = null;
+  /** The pending reconnect timer, cleared by stop(). */
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Reconnect delay ladder (ms) the server last asked for. */
+  private serverBackoffMs: number[] | null = null;
 
   constructor(opts: RealtimeOptions) {
     super();
@@ -173,6 +201,15 @@ export class RealtimeClient extends EventEmitter {
   /** The stable device id used for every session of this client. */
   get deviceIdValue(): string {
     return this.deviceId;
+  }
+
+  /**
+   * The terminal error (unauthorized, device displaced) that ended the loop, or `null`.
+   * Set when the loop stops because of it, cleared by {@link start}. Lets callers that
+   * do not listen to `error` tell why `start()` resolved.
+   */
+  get terminalError(): Error | null {
+    return this.terminal;
   }
 
   /** The last received state frame, or `null` before the first frame. */
@@ -243,19 +280,24 @@ export class RealtimeClient extends EventEmitter {
       return;
     }
     this.running = true;
+    this.terminal = null;
+    this.serverBackoffMs = null;
     while (this.running) {
       const client = new YnisonClient({
+        ...this.opts.ynison,
         token: this.opts.token,
         deviceId: this.deviceId,
         deviceInfo: this.opts.deviceInfo ?? null,
       });
+      client.onError((err) => this.safeEmitError(err));
       this.current = client;
       this.lastStateAt = Date.now();
       let opened = false;
+      let openedAt = 0;
       client.onState((state) => {
         if (!opened) {
           opened = true;
-          this.attempt = 0;
+          openedAt = Date.now();
           this.emit('open');
         }
         void this.handleState(state);
@@ -263,11 +305,37 @@ export class RealtimeClient extends EventEmitter {
 
       const staleTimer = this.startStaleWatchdog(client);
       let delayMs: number | null = null;
+      let terminal = false;
+      let shortSession = false;
+      // Reset the attempt counter (and any server ladder) only after a session
+      // that stayed open long enough; evaluated when the session ends.
+      const settle = (): void => {
+        if (!opened) {
+          return;
+        }
+        if (Date.now() - openedAt >= (this.opts.stableSessionMs ?? 5000)) {
+          this.attempt = 0;
+          this.serverBackoffMs = null;
+        } else {
+          shortSession = true;
+        }
+      };
       try {
         await client.connect();
+        settle();
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        this.safeEmitError(err);
+        settle();
+        if (this.running) {
+          this.safeEmitError(err);
+        }
+        if (err instanceof YnisonUnauthorizedError || err instanceof YnisonDeviceDisplacedError) {
+          terminal = true;
+          this.terminal = err;
+        }
+        if (err instanceof YnisonServerError && err.backoffMs.length > 0) {
+          this.serverBackoffMs = err.backoffMs;
+        }
         // honour a server go-away, but cap it: Ynison's "temporary unavailable"
         // can carry an hour-long go-away, which would freeze the client until it
         // elapses. Capping lets us recover within `goAwayMaxMs` of the service
@@ -284,19 +352,29 @@ export class RealtimeClient extends EventEmitter {
         this.current = null;
       }
 
-      if (!this.running || this.opts.reconnect === false) {
+      if (terminal || !this.running || this.opts.reconnect === false) {
         break;
       }
-      const wait = delayMs ?? this.backoff();
+      let wait = delayMs ?? this.backoff();
+      if (shortSession) {
+        wait = Math.max(wait, Math.min(1000, this.opts.reconnectMaxMs ?? 30_000));
+      }
       this.emit('reconnect', wait);
+      if (!this.running) {
+        break;
+      }
       await new Promise<void>((resolve) => {
         this.stopResolve = resolve;
-        setTimeout(() => { this.stopResolve = null; resolve(); }, wait);
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = null;
+          this.stopResolve = null;
+          resolve();
+        }, wait);
       });
       this.stopResolve = null;
     }
     this.running = false;
-    this.emit('close');
+    this.emit('close', this.terminal);
   }
 
   /**
@@ -311,21 +389,62 @@ export class RealtimeClient extends EventEmitter {
     }
   }
 
+  private requireClient(): YnisonClient {
+    if (!this.current) throw new YnisonConnectionClosedError('realtime client is not connected');
+    return this.current;
+  }
+
+  /** Send a raw request frame on the current session. @throws {YnisonConnectionClosedError} When not connected. */
+  sendRaw(request: Record<string, unknown> | string): void {
+    this.requireClient().sendRaw(request);
+  }
+
+  /** Pause playback. @throws {YnisonConnectionClosedError} When not connected. */
+  pause(): void {
+    this.requireClient().pause();
+  }
+
+  /** Resume playback. @throws {YnisonConnectionClosedError} When not connected. */
+  resume(): void {
+    this.requireClient().resume();
+  }
+
+  /** Next track in playback order. @throws {YnisonConnectionClosedError} When not connected. */
+  nextTrack(): void {
+    this.requireClient().nextTrack();
+  }
+
+  /** Previous track in playback order. @throws {YnisonConnectionClosedError} When not connected. */
+  previousTrack(): void {
+    this.requireClient().previousTrack();
+  }
+
+  /** Set a device volume (`0..1`, default target: the active device). @throws {YnisonConnectionClosedError} When not connected. */
+  setVolume(volume: number, targetDeviceId?: string): void {
+    this.requireClient().setVolume(volume, targetDeviceId);
+  }
+
   /** Stop the realtime loop and close the connection. */
   stop(): void {
     this.running = false;
     this.current?.disconnect();
     this.current = null;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.stopResolve?.();
     this.stopResolve = null;
   }
 
+  /** `schedule[min(attempt, last)] + random(0..250)` ms, floored by `reconnectBaseMs` and capped by `reconnectMaxMs`. */
   private backoff(): number {
-    const base = this.opts.reconnectBaseMs ?? 1000;
-    const max = this.opts.reconnectMaxMs ?? 30_000;
-    const delay = Math.min(max, base * 2 ** this.attempt);
+    const schedule = this.serverBackoffMs ?? DEFAULT_BACKOFF_MS;
+    const base = schedule[Math.min(this.attempt, schedule.length - 1)] ?? 0;
     this.attempt += 1;
-    return delay;
+    const max = this.opts.reconnectMaxMs ?? 30_000;
+    const delay = Math.max(this.opts.reconnectBaseMs ?? 0, base + Math.random() * 250);
+    return Math.round(Math.min(max, delay));
   }
 
   /**

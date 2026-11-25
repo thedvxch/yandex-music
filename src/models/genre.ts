@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, deRecord, isJsonObject, reportUnknown } from '../base.js';
-import { Icon } from './common.js';
+import { Icon, Images } from './common.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -39,8 +39,8 @@ export class Genre extends YandexMusicModel {
   title?: string;
   /** Localized titles keyed by language code (`ru`, `en`, …). */
   titles?: Record<string, GenreTitle>;
-  /** Genre images (raw JSON, pending a typed model). */
-  images?: JSONValue;
+  /** Genre images. */
+  images?: Images;
   /** Whether shown in the genre menu. */
   showInMenu?: boolean;
   /** Region codes where shown. */
@@ -69,7 +69,6 @@ export class Genre extends YandexMusicModel {
       'weight',
       'composerTop',
       'title',
-      'images',
       'showInMenu',
       'showInRegions',
       'hideInRegions',
@@ -79,6 +78,7 @@ export class Genre extends YandexMusicModel {
     ]);
     model.titles = deRecord(GenreTitle.deJson, raw['titles'], client);
     model.radioIcon = Icon.deJson(raw['radioIcon'], client) ?? undefined;
+    model.images = Images.deJson(raw['images'], client) ?? undefined;
     model.subGenres = deList(Genre.deJson, raw['subGenres'], client);
     reportUnknown(client, 'Genre', raw, model);
     return model;

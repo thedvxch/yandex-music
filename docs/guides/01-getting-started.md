@@ -45,6 +45,18 @@ console.log(await lyrics?.fetchLyrics());
 `usersPlaylists*`, `pins`, `presaves`), работали без явного `userId`.
 Каталожные read-only запросы (`tracks`, `albums`, `search`, …) работают и без `init()`.
 
+## Токен, таймаут и прокси
+
+- **Токен.** `client.token` — сеттер: `client.token = 'новый'` сразу обновляет заголовок
+  `Authorization`, `client.token = undefined` его убирает (для нижнего уровня есть
+  `client.request.setAuthorization(token)` и `clearAuthorization()`).
+- **Таймаут.** Опция `timeout` (мс, по умолчанию 5000) задаёт таймаут запроса. Для
+  одного запроса его можно переопределить: `client.request.send(method, url, { timeout })`.
+  Ретраи настраиваются `retries`, `retryBaseMs`, `retryMaxMs`.
+- **Прокси.** Встроенной поддержки прокси нет: передайте `fetch`, который ходит через
+  прокси (`fetch: myProxyFetch`). Опция `proxyUrl` на транспорте объявлена устаревшей —
+  она никогда не применялась.
+
 ## Обработка ошибок
 
 Любая ошибка наследует `YandexMusicError`; сетевые дополнительно наследуют
@@ -62,3 +74,10 @@ try {
   else throw e;
 }
 ```
+
+У ошибок есть поля `status` (HTTP-код), `code` (машинный код из тела, например `error`
+OAuth) и `retryAfterMs` (подсказка из `Retry-After`). `429` даёт
+`TooManyRequestsError`, `5xx` (кроме `502`) — `ServerError`; обе наследуют
+`NetworkError`. На `429`/`503` библиотека ждёт `Retry-After`, но если пауза больше
+`retryMaxMs`, ошибка бросается сразу. Если у метода нужен user id, а `init()` не
+вызывался, бросается `IdMissingError` — до любого запроса.

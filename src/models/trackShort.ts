@@ -5,6 +5,7 @@
  */
 import { YandexMusicModel, assign, isJsonObject, reportUnknown } from '../base.js';
 import { Track } from './track/track.js';
+import { Chart } from './landing/landing.js';
 import type { Client } from '../client.js';
 import type { JSONValue } from '../types.js';
 
@@ -25,8 +26,8 @@ export class TrackShort extends YandexMusicModel {
   playCount?: number;
   /** Whether recently added. */
   recent?: boolean;
-  /** Chart placement (raw JSON, pending a typed model). */
-  chart?: JSONValue;
+  /** Chart placement. */
+  chart?: Chart;
   /** The full track, when inlined by the endpoint. */
   track?: Track;
   /** Original index within the source list. */
@@ -46,10 +47,10 @@ export class TrackShort extends YandexMusicModel {
       'albumId',
       'playCount',
       'recent',
-      'chart',
       'originalIndex',
       'originalShuffleIndex',
     ]);
+    model.chart = Chart.deJson(raw['chart'], client) ?? undefined;
     model.track = Track.deJson(raw['track'], client) ?? undefined;
     reportUnknown(client, 'TrackShort', raw, model);
     return model;

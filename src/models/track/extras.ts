@@ -218,6 +218,11 @@ export class LosslessDownloadInfo extends YandexMusicModel {
     return this.codec === 'flac' || this.codec === 'flac-mp4';
   }
 
+  /** Whether the stream is AES-CTR-encrypted: a key is present and the transport is not explicitly `raw` (a missing transport counts as encrypted). */
+  get isEncrypted(): boolean {
+    return this.transport !== 'raw' && Boolean(this.key);
+  }
+
   /** Every candidate stream URL, in preference order (`urls` then `url`). */
   links(): string[] {
     const all = [...(this.urls ?? []), this.url].filter((u): u is string => Boolean(u));
@@ -240,7 +245,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
 
   /**
    * Download the audio as bytes, transparently AES-CTR-decrypting an `encraw`
-   * stream when {@link key} is present.
+   * stream (a {@link key} is present and the transport is not `raw`); `raw` bytes are returned unchanged.
    *
    * `/get-file-info` returns several mirror URLs on different CDN hosts; this
    * tries each in order so a single flaky host doesn't fail the download.
@@ -259,7 +264,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
     for (const link of links) {
       try {
         const bytes = await request.retrieve(link);
-        return this.key ? decryptEncraw(bytes, this.key) : bytes;
+        return this.isEncrypted ? decryptEncraw(bytes, this.key!) : bytes;
       } catch (error) {
         lastError = error;
       }
@@ -288,7 +293,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
       throw new Error('LosslessDownloadInfo has no stream URL.');
     }
     const request = this.requireClient().request;
-    const key = this.key;
+    const key = this.isEncrypted ? this.key : undefined;
     const transform = key ? (): Transform => encrawDecipher(key) : undefined;
     if (options.race) {
       return request.raceToFile(links, filename, { transform });
@@ -303,6 +308,31 @@ export class LosslessDownloadInfo extends YandexMusicModel {
       }
     }
     throw lastError;
+  }
+}
+
+/** Reference-library name for {@link LosslessDownloadInfo}. */
+export const FileDownloadInfo = LosslessDownloadInfo;
+/** Reference-library name for {@link LosslessDownloadInfo}. */
+export type FileDownloadInfo = LosslessDownloadInfo;
+
+/** Result of `/get-file-info`: wraps the {@link LosslessDownloadInfo} (`downloadInfo`). */
+export class FileInfo extends YandexMusicModel {
+  /** The download info of the file. */
+  downloadInfo?: LosslessDownloadInfo;
+
+  /** @see {@link FileInfo} */
+  static deJson(raw: JSONValue | undefined, client?: Client): FileInfo | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new FileInfo(client);
+    const info = LosslessDownloadInfo.deJson(raw['downloadInfo'], client);
+    if (info) {
+      model.downloadInfo = info;
+    }
+    reportUnknown(client, 'FileInfo', raw, model, ['downloadInfo']);
+    return model;
   }
 }
 

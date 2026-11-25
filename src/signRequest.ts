@@ -57,10 +57,27 @@ export function getSignRequest(trackId: string | number, key: string = DEFAULT_S
   return { timestamp, value };
 }
 
-/** Codecs requested from `/get-file-info`, in the order the Android client sends them. */
-export const FILE_INFO_CODECS = 'flac,flac-mp4,mp3,aac,he-aac,aac-mp4,he-aac-mp4';
+/** Signing key used by the desktop client for `/get-file-info`. Bound to {@link DESKTOP_CLIENT}. */
+export const DESKTOP_SIGN_KEY = 'kzqU4XhfCaY6B6JTHODeq5';
 
-/** Transport requested from `/get-file-info`. `encraw` returns an AES-CTR-encrypted stream. */
+/** `X-Yandex-Music-Client` header value that {@link DESKTOP_SIGN_KEY} is bound to. */
+export const DESKTOP_CLIENT = 'YandexMusicDesktopAppWindows/5.95.0';
+
+/** Codecs requested from `/get-file-info`, in the order the desktop client sends them. */
+export const FILE_INFO_CODECS_LIST: readonly string[] = [
+  'flac',
+  'flac-mp4',
+  'aac-mp4',
+  'he-aac-mp4',
+  'aac',
+  'he-aac',
+  'mp3',
+];
+
+/** Comma-joined form of {@link FILE_INFO_CODECS_LIST}, as sent in the query. */
+export const FILE_INFO_CODECS = FILE_INFO_CODECS_LIST.join(',');
+
+/** Default transport requested from `/get-file-info`. `encraw` returns an AES-CTR-encrypted stream. */
 export const FILE_INFO_TRANSPORT = 'encraw';
 
 /** A computed `/get-file-info` signature. */
@@ -72,30 +89,31 @@ export interface FileInfoSign {
 }
 
 /**
- * Create the signature for a `/get-file-info` (lossless download) request.
+ * Create the signature for a `/get-file-info` request.
  *
  * The signature is `HMAC-SHA256(key, "{ts}{trackId}{quality}{codecs}{transport}")`
- * with commas stripped, Base64-encoded, with the trailing character removed —
- * matching the Android client. The same `codecs`/`transport` strings must be sent
- * in the query for the signature to validate.
+ * with the codecs joined without commas, Base64-encoded, with the trailing
+ * character removed. The track id is used exactly as it will be sent in the query
+ * (no numeric conversion), and the request must carry the `X-Yandex-Music-Client`
+ * header the key is bound to ({@link DESKTOP_CLIENT} for {@link DESKTOP_SIGN_KEY}).
  *
- * @param trackId - The track the request is scoped to.
+ * @param trackId - The track the request is scoped to, as sent in the query.
  * @param quality - Requested quality (for example `lossless`). Defaults to `lossless`.
- * @param codecs - Requested codecs string. Defaults to {@link FILE_INFO_CODECS}.
- * @param transport - Requested transport string. Defaults to {@link FILE_INFO_TRANSPORT}.
- * @param key - The signing key. Defaults to {@link DEFAULT_SIGN_KEY}.
+ * @param codecs - Requested codecs, as a list or a comma-separated string. Defaults to {@link FILE_INFO_CODECS_LIST}.
+ * @param transport - Requested transport. Defaults to {@link FILE_INFO_TRANSPORT}.
+ * @param key - The signing key. Defaults to {@link DESKTOP_SIGN_KEY}.
  * @returns The timestamp/value pair to send alongside the request.
  */
 export function getFileInfoSign(
   trackId: string | number,
   quality = 'lossless',
-  codecs: string = FILE_INFO_CODECS,
+  codecs: string | readonly string[] = FILE_INFO_CODECS_LIST,
   transport: string = FILE_INFO_TRANSPORT,
-  key: string = DEFAULT_SIGN_KEY,
+  key: string = DESKTOP_SIGN_KEY,
 ): FileInfoSign {
-  const numericId = convertTrackIdToNumber(trackId);
   const ts = Math.floor(Date.now() / 1000);
-  const message = `${ts}${numericId}${quality}${codecs}${transport}`.replace(/,/g, '');
+  const codecText = typeof codecs === 'string' ? codecs.replace(/,/g, '') : codecs.join('');
+  const message = `${ts}${String(trackId)}${quality}${codecText}${transport}`;
   const value = createHmac('sha256', key).update(message, 'utf8').digest('base64').slice(0, -1);
 
   return { ts, value };

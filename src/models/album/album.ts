@@ -82,6 +82,23 @@ export class Deprecation extends YandexMusicModel {
   }
 }
 
+/** Whether an album has a trailer available. */
+export class AlbumTrailerStatus extends YandexMusicModel {
+  /** Whether a trailer is available. */
+  available?: boolean;
+
+  /** @see {@link AlbumTrailerStatus} */
+  static deJson(raw: JSONValue | undefined, client?: Client): AlbumTrailerStatus | null {
+    if (!isJsonObject(raw)) {
+      return null;
+    }
+    const model = new AlbumTrailerStatus(client);
+    assign(model, raw, ['available']);
+    reportUnknown(client, 'AlbumTrailerStatus', raw, model);
+    return model;
+  }
+}
+
 /** A call-to-action button shown on an album page. */
 export class AlbumActionButton extends YandexMusicModel {
   /** Button caption. */
@@ -90,6 +107,8 @@ export class AlbumActionButton extends YandexMusicModel {
   url?: string;
   /** Button color. */
   color?: string;
+  /** Whether the URL opens in an external browser. */
+  viewBrowser?: boolean;
 
   /** @see {@link AlbumActionButton} */
   static deJson(raw: JSONValue | undefined, client?: Client): AlbumActionButton | null {
@@ -97,7 +116,7 @@ export class AlbumActionButton extends YandexMusicModel {
       return null;
     }
     const model = new AlbumActionButton(client);
-    assign(model, raw, ['text', 'url', 'color']);
+    assign(model, raw, ['text', 'url', 'color', 'viewBrowser']);
     reportUnknown(client, 'AlbumActionButton', raw, model);
     return model;
   }
@@ -153,8 +172,8 @@ export class Album extends YandexMusicModel {
   duplicates?: Album[];
   /** Pagination metadata for the track list (with-tracks endpoint). */
   pager?: Pager;
-  /** Album trailer (free-form raw JSON, pending a typed model). */
-  trailer?: JSONValue;
+  /** Album trailer availability. */
+  trailer?: AlbumTrailerStatus;
   /** Explicit/content warning marker. */
   contentWarning?: string;
   /** Genre. */
@@ -221,6 +240,20 @@ export class Album extends YandexMusicModel {
   millisecondsUntilRelease?: number;
   /** Pre-save availability date (ISO 8601), for upcoming albums. */
   presaveDate?: string;
+  /** Total duration in seconds. */
+  durationSec?: number;
+  /** Original release year. */
+  originalReleaseYear?: number;
+  /** Purchase offers (free-form raw JSON). */
+  buy?: JSONValue[];
+  /** Prerolls (free-form raw JSON). */
+  prerolls?: JSONValue[];
+  /** Whether available as a ringback tone. */
+  availableAsRbt?: boolean;
+  /** Whether playback position is remembered (audiobooks/podcasts). */
+  rememberPosition?: boolean;
+  /** Nested albums (for example a series). */
+  albums?: Album[];
 
   /**
    * Deserialize an {@link Album}.
@@ -276,7 +309,10 @@ export class Album extends YandexMusicModel {
       'sortOrder',
       'backgroundImageUrl',
       'childContent',
-      'trailer',
+      'durationSec',
+      'originalReleaseYear',
+      'availableAsRbt',
+      'rememberPosition',
       'millisecondsUntilRelease',
       'presaveDate',
       'albumType',
@@ -287,6 +323,10 @@ export class Album extends YandexMusicModel {
     model.derivedColors = CoverDerivedColors.deJson(raw['derivedColors'], client) ?? undefined;
     model.customWave = CustomWave.deJson(raw['customWave'], client) ?? undefined;
     model.pager = Pager.deJson(raw['pager'], client) ?? undefined;
+    model.trailer = AlbumTrailerStatus.deJson(raw['trailer'], client) ?? undefined;
+    model.buy = Array.isArray(raw['buy']) ? raw['buy'] : undefined;
+    model.prerolls = Array.isArray(raw['prerolls']) ? raw['prerolls'] : undefined;
+    model.albums = raw['albums'] ? deList(Album.deJson, raw['albums'], client) : undefined;
     model.duplicates = raw['duplicates'] ? deList(Album.deJson, raw['duplicates'], client) : undefined;
     model.trackPosition = TrackPosition.deJson(raw['trackPosition'], client) ?? undefined;
     model.deprecation = Deprecation.deJson(raw['deprecation'], client) ?? undefined;
