@@ -9,13 +9,15 @@
  *
  * @packageDocumentation
  */
-import { writeFile, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { writeFile, rename, rm } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { Transform } from 'node:stream';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import {
+  AbortedError,
   BadRequestError,
   ConflictError,
   NetworkError,
@@ -82,8 +84,29 @@ export interface ResponseLike {
 /** A JSON request body: {@link JSONValue} whose object properties may be `undefined` (dropped on serialization). */
 export type JsonInput = JSONValue | undefined | { [k: string]: JsonInput } | JsonInput[];
 
+/** Origin of the default API host; receives the `Authorization` header even without a client. */
+export const DEFAULT_API_ORIGIN = 'https://api.music.yandex.net';
+
+/**
+ * Per-call transport options. Pass them to {@link Request.send} (and the other
+ * verb helpers), or scope them to a whole client view with
+ * {@link ClientBase.withOptions} / {@link Request.withOptions}.
+ */
+export interface RequestOptions {
+  /**
+   * Cancels the request, including retries and the backoff sleep between them.
+   * A caller abort rejects with {@link AbortedError} (never retried), distinct
+   * from {@link TimedOutError}.
+   */
+  signal?: AbortSignal;
+  /** Per-attempt timeout in milliseconds (JSON requests). */
+  timeout?: number;
+  /** Retries for transient failures (`0` disables). Negative or non-finite values count as `0`. */
+  retries?: number;
+}
+
 /** Options for {@link Request.send}. */
-export interface SendOptions {
+export interface SendOptions extends RequestOptions {
   /** Query-string parameters. */
   params?: Params;
   /** Form-encoded body (an object) or a pre-encoded JSON string. Ignored when `json` is set. */
@@ -92,10 +115,20 @@ export interface SendOptions {
   json?: JsonInput;
   /** Extra headers for this request; a `null` value removes that header. */
   headers?: Record<string, string | null>;
-  /** Per-call timeout override (milliseconds). */
-  timeout?: number;
   /** Retry transient failures even for a non-`GET` method (idempotent reads over `POST`). */
   retry?: boolean;
+}
+
+/** Options for {@link Request.streamToFile} and {@link Request.raceToFile}. */
+export interface StreamOptions {
+  /** Overall deadline in ms. Defaults to {@link DEFAULT_DOWNLOAD_TIMEOUT_MS}. */
+  timeout?: number;
+  /** Transform factory (a fresh transform per call, since a transform can't be reused). */
+  transform?: () => Transform;
+  /** Abort when no bytes are written for this long. Defaults to {@link DEFAULT_DOWNLOAD_IDLE_MS}. */
+  idleTimeoutMs?: number;
+  /** Cancels the download; rejects with {@link AbortedError}. */
+  signal?: AbortSignal;
 }
 
 interface BodyInit {
@@ -138,6 +171,14 @@ export interface RequestInit {
   retryBaseMs?: number;
   /** Maximum retry backoff in ms. Defaults to `4000`. */
   retryMaxMs?: number;
+  /**
+   * Extra origins (for example `https://proxy.example`) that may receive the
+   * `Authorization` and `X-Yandex-Music-Client` headers. The owning client's
+   * `baseUrl` origin (or {@link DEFAULT_API_ORIGIN} without a client) is always
+   * allowed; every other host (CDN mirrors, lyrics storage, arbitrary URLs)
+   * gets neither header.
+   */
+  authOrigins?: string[];
 }
 
 interface Envelope {
@@ -150,7 +191,83 @@ interface Envelope {
  * sequential retry. Never surfaces to callers. */
 class RaceFailed extends Error {}
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** Headers that carry credentials or app identity and are only sent to allowed origins. */
+const PRIVILEGED_HEADERS = new Set(['authorization', 'x-yandex-music-client']);
+
+const INSPECT = Symbol.for('nodejs.util.inspect.custom');
+
+function abortedError(signal: AbortSignal): AbortedError {
+  return new AbortedError(undefined, { cause: signal.reason });
+}
+
+/** Sleep for `ms`, rejecting with {@link AbortedError} as soon as `signal` aborts. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortedError(signal));
+      return;
+    }
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(abortedError(signal!));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/** Abort `controller` when `signal` aborts; returns the listener cleanup. */
+function forwardAbort(signal: AbortSignal | undefined, controller: AbortController): () => void {
+  if (!signal) {
+    return () => undefined;
+  }
+  if (signal.aborted) {
+    controller.abort();
+    return () => undefined;
+  }
+  const onAbort = (): void => controller.abort();
+  signal.addEventListener('abort', onAbort, { once: true });
+  return () => signal.removeEventListener('abort', onAbort);
+}
+
+/** Combine two optional signals into one (either aborting aborts the result). */
+function anySignal(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
+  if (!a || !b || a === b) {
+    return a ?? b;
+  }
+  return AbortSignal.any([a, b]);
+}
+
+/** Clamp a retry count to a non-negative integer (negative, `NaN` and `Infinity` → `0`). */
+function normalizeRetries(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/** Origin of a URL, or `null` when it does not parse. */
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Unique sibling path a download is written to before the atomic rename. */
+function partPath(filename: string): string {
+  return `${filename}.${randomUUID().slice(0, 8)}.part`;
+}
+
+/** Copy of `headers` with the `Authorization` value masked, for logging and inspection. */
+function redactHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    out[name] = name.toLowerCase() === 'authorization' ? 'OAuth [redacted]' : value;
+  }
+  return out;
+}
 
 /**
  * Read a response header without ever throwing: custom fetch shims may expose
@@ -220,8 +337,8 @@ export class Request {
   proxyUrl?: string;
   /** Default timeout in milliseconds. */
   timeout: number;
-  /** The owning client. */
-  client?: Client;
+  /** The owning client (non-enumerable, so serializing the transport does not walk back into the client). */
+  declare client?: Client;
   /** `User-Agent` sent with every request. */
   userAgent: string;
   /** Retries for transient failures on idempotent requests. */
@@ -230,8 +347,12 @@ export class Request {
   retryBaseMs: number;
   /** Maximum retry backoff in ms. */
   retryMaxMs: number;
+  /** Extra origins allowed to receive the auth headers (see {@link RequestInit.authOrigins}). */
+  authOrigins: string[];
   /** The `fetch` implementation used for every request. */
   private readonly fetchImpl: FetchLike;
+  /** Defaults applied to every call made through this instance (set by {@link Request.withOptions}). */
+  private callDefaults: RequestOptions = {};
 
   /**
    * @param options - Transport configuration.
@@ -244,12 +365,59 @@ export class Request {
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? (globalThis.fetch as FetchLike);
     this.userAgent = options.userAgent ?? USER_AGENT;
-    this.retries = options.retries ?? 2;
+    this.retries = normalizeRetries(options.retries ?? 2);
     this.retryBaseMs = options.retryBaseMs ?? 300;
     this.retryMaxMs = options.retryMaxMs ?? 4000;
+    this.authOrigins = (options.authOrigins ?? []).map((o) => originOf(o)).filter((o): o is string => o !== null);
+    Object.defineProperty(this, 'client', { value: undefined, writable: true, configurable: true, enumerable: false });
     if (options.client) {
       this.setClient(options.client);
     }
+  }
+
+  /**
+   * A view of this transport whose calls default to `options` (an explicit
+   * per-call option still wins; signals are combined). The view shares headers,
+   * token, `fetch` and configuration with this instance.
+   *
+   * @param options - Defaults for every call made through the view.
+   * @returns The view.
+   */
+  withOptions(options: RequestOptions): Request {
+    const view = Object.create(this) as Request;
+    view.callDefaults = {
+      ...this.callDefaults,
+      ...options,
+      signal: anySignal(this.callDefaults.signal, options.signal),
+    };
+    return view;
+  }
+
+  /** Whether `url` may receive the `Authorization` / `X-Yandex-Music-Client` headers. */
+  isAuthOrigin(url: string): boolean {
+    const origin = originOf(url);
+    if (origin === null) {
+      return false;
+    }
+    return origin === originOf(this.client?.baseUrl ?? DEFAULT_API_ORIGIN) || this.authOrigins.includes(origin);
+  }
+
+  /** Redacted, cycle-free data view (the `Authorization` value is masked). */
+  toJSON(): Record<string, unknown> {
+    return {
+      headers: redactHeaders(this.headers),
+      timeout: this.timeout,
+      userAgent: this.userAgent,
+      retries: this.retries,
+      retryBaseMs: this.retryBaseMs,
+      retryMaxMs: this.retryMaxMs,
+      authOrigins: this.authOrigins,
+    };
+  }
+
+  /** `util.inspect` / `console.log` output with the token redacted. */
+  [INSPECT](): string {
+    return `Request ${JSON.stringify(this.toJSON())}`;
   }
 
   /**
@@ -343,14 +511,7 @@ export class Request {
     } else if (options.form !== undefined) {
       body = { body: this.encodeForm(options.form), form: true };
     }
-    const bytes = await this.requestWrapper(
-      method,
-      this.withQuery(url, options.params),
-      body,
-      options.timeout,
-      options.headers,
-      options.retry === true,
-    );
+    const bytes = await this.requestWrapper(method, this.withQuery(url, options.params), body, options);
     return this.unwrap(bytes);
   }
 
@@ -419,8 +580,8 @@ export class Request {
    * @returns The raw response body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async retrieve(url: string, timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS): Promise<Uint8Array> {
-    return this.requestWrapper('GET', url, undefined, timeout);
+  async retrieve(url: string, timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS, options: RequestOptions = {}): Promise<Uint8Array> {
+    return this.requestWrapper('GET', url, undefined, { ...options, timeout });
   }
 
   /**
@@ -434,10 +595,16 @@ export class Request {
    * @param url - Absolute request URL.
    * @param filename - Destination path, including extension.
    * @param timeout - Optional per-call timeout override (milliseconds).
+   * @param options - Optional `signal`.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async download(url: string, filename: string, timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS): Promise<void> {
-    return this.streamToFile(url, filename, { timeout });
+  async download(
+    url: string,
+    filename: string,
+    timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS,
+    options: Pick<RequestOptions, 'signal'> = {},
+  ): Promise<void> {
+    return this.streamToFile(url, filename, { timeout, signal: options.signal });
   }
 
   /**
@@ -455,27 +622,29 @@ export class Request {
    *   (a fresh transform per call, since a transform can't be reused).
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async streamToFile(
-    url: string,
-    filename: string,
-    options: { timeout?: number; transform?: () => Transform; idleTimeoutMs?: number } = {},
-  ): Promise<void> {
+  async streamToFile(url: string, filename: string, options: StreamOptions = {}): Promise<void> {
+    const signal = anySignal(this.callDefaults.signal, options.signal);
+    if (signal?.aborted) {
+      throw abortedError(signal);
+    }
     const controller = new AbortController();
     const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), ms);
+    const unforward = forwardAbort(signal, controller);
     const idleMs = options.idleTimeoutMs ?? DEFAULT_DOWNLOAD_IDLE_MS;
-    let failed = false;
+    // Write to a unique sibling and rename on success: a failure never touches
+    // an existing file at `filename`, and readers never see a partial file.
+    const part = partPath(filename);
     try {
       const response = await this.openValidated(url, controller.signal);
-      await this.pipeBody(response, filename, options.transform?.(), { controller, idleMs });
+      await this.pipeBody(response, part, options.transform?.(), { controller, idleMs });
+      await rename(part, filename);
     } catch (error) {
-      failed = true;
-      throw this.wrapTransportError(error);
+      await rm(part, { force: true }).catch(() => undefined);
+      throw this.wrapTransportError(error, signal);
     } finally {
       clearTimeout(timer);
-      if (failed) {
-        await unlink(filename).catch(() => undefined);
-      }
+      unforward();
     }
   }
 
@@ -488,22 +657,24 @@ export class Request {
    *
    * @param urls - Candidate mirror URLs (preference order; used for the fallback).
    * @param filename - Destination path, including extension.
-   * @param options - `timeout` (ms) and an optional `transform` stream factory.
+   * @param options - `timeout` (ms), `signal` and an optional `transform` stream factory.
    * @throws {YandexMusicError} On any transport or API error (after the fallback).
    */
-  async raceToFile(
-    urls: string[],
-    filename: string,
-    options: { timeout?: number; transform?: () => Transform; idleTimeoutMs?: number } = {},
-  ): Promise<void> {
+  async raceToFile(urls: string[], filename: string, options: StreamOptions = {}): Promise<void> {
     if (urls.length <= 1) {
       return this.streamToFile(urls[0] ?? '', filename, options);
+    }
+    const signal = anySignal(this.callDefaults.signal, options.signal);
+    if (signal?.aborted) {
+      throw abortedError(signal);
     }
     const ms = options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     const idleMs = options.idleTimeoutMs ?? DEFAULT_DOWNLOAD_IDLE_MS;
     const deadline = Date.now() + ms;
     const controllers = urls.map(() => new AbortController());
     const timer = setTimeout(() => controllers.forEach((c) => c.abort()), ms);
+    const unforward = controllers.map((c) => forwardAbort(signal, c));
+    const part = partPath(filename);
     try {
       let winner: number;
       let response: ResponseLike;
@@ -519,36 +690,72 @@ export class Request {
       }
       // commit to the winner; drop the losing connections.
       controllers.forEach((c, i) => i !== winner && c.abort());
-      await this.pipeBody(response, filename, options.transform?.(), {
+      await this.pipeBody(response, part, options.transform?.(), {
         controller: controllers[winner]!,
         idleMs,
       });
+      await rename(part, filename);
     } catch (error) {
       // winner stream broke (or no mirror responded): robust sequential fallback.
-      // Clean up any partial bytes the winner wrote — otherwise a deadline hit
-      // before the fallback loop runs (or even starts) leaves a truncated file.
-      await unlink(filename).catch(() => undefined);
+      // Only the temp file is removed; an existing `filename` is left untouched.
+      await rm(part, { force: true }).catch(() => undefined);
+      if (signal?.aborted) {
+        throw abortedError(signal);
+      }
       let lastError: unknown = error instanceof RaceFailed ? undefined : error;
       for (const url of urls) {
         const remaining = deadline - Date.now();
         if (remaining <= 0) break;
         try {
-          await this.streamToFile(url, filename, { ...options, timeout: remaining });
+          await this.streamToFile(url, filename, { ...options, signal, timeout: remaining });
           return;
         } catch (e) {
           lastError = e;
+          if (e instanceof AbortedError) {
+            break;
+          }
         }
       }
-      throw this.wrapTransportError(lastError);
+      throw this.wrapTransportError(lastError ?? new TimedOutError(), signal);
     } finally {
       clearTimeout(timer);
+      unforward.forEach((f) => f());
     }
+  }
+
+  /**
+   * Headers for one request: the transport headers plus `User-Agent`, with the
+   * privileged headers (`Authorization`, `X-Yandex-Music-Client`) dropped for
+   * origins outside the allowlist, then the per-call `extraHeaders` applied (an
+   * explicit per-call header is always honoured; `null` removes a header).
+   */
+  private buildHeaders(url: string, extraHeaders?: Record<string, string | null>): Record<string, string> {
+    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
+    if (!this.isAuthOrigin(url)) {
+      for (const name of Object.keys(headers)) {
+        if (PRIVILEGED_HEADERS.has(name.toLowerCase())) {
+          delete headers[name];
+        }
+      }
+    }
+    for (const [name, value] of Object.entries(extraHeaders ?? {})) {
+      if (value === null) {
+        const wanted = name.toLowerCase();
+        for (const existing of Object.keys(headers)) {
+          if (existing.toLowerCase() === wanted) {
+            delete headers[existing];
+          }
+        }
+      } else {
+        headers[name] = value;
+      }
+    }
+    return headers;
   }
 
   /** Open a `GET` and validate a 2xx status, throwing a typed error otherwise. */
   private async openValidated(url: string, signal: AbortSignal): Promise<ResponseLike> {
-    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
-    const response = await this.fetchImpl(url, { method: 'GET', headers, signal });
+    const response = await this.fetchImpl(url, { method: 'GET', headers: this.buildHeaders(url), signal });
     if (response.status < 200 || response.status > 299) {
       this.handleErrorResponse(response.status, new Uint8Array(await response.arrayBuffer()), response.headers);
     }
@@ -602,13 +809,17 @@ export class Request {
     }
   }
 
-  /** Map a transport-layer throwable to the library's typed errors. */
-  private wrapTransportError(error: unknown): Error {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return new TimedOutError();
-    }
+  /** Map a transport-layer throwable to the library's typed errors; a caller
+   * abort (`signal` aborted) becomes {@link AbortedError}. */
+  private wrapTransportError(error: unknown, signal?: AbortSignal): Error {
     if (error instanceof YandexMusicError) {
       return error;
+    }
+    if (signal?.aborted) {
+      return abortedError(signal);
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      return new TimedOutError();
     }
     return new NetworkError(error instanceof Error ? error.message : String(error), { cause: error });
   }
@@ -650,21 +861,27 @@ export class Request {
    * Perform a request, retrying transient transport failures on idempotent
    * (`GET`) methods with exponential backoff + jitter. Mutating methods are not
    * retried (one attempt) unless the call opts in with `retry`. Typed API errors (4xx/auth) are not retried either —
-   * only {@link NetworkError} and {@link TimedOutError} are.
+   * only {@link NetworkError} and {@link TimedOutError} are. A caller abort stops
+   * the attempt and the backoff sleep immediately.
    */
   private async requestWrapper(
     method: string,
     url: string,
-    body?: BodyInit,
-    timeout?: number,
-    extraHeaders?: Record<string, string | null>,
-    retry = false,
+    body: BodyInit | undefined,
+    options: SendOptions,
   ): Promise<Uint8Array> {
-    const maxAttempts = method === 'GET' || retry ? this.retries + 1 : 1;
+    const defaults = this.callDefaults;
+    const signal = anySignal(defaults.signal, options.signal);
+    const timeout = options.timeout ?? defaults.timeout;
+    const retries = normalizeRetries(options.retries ?? defaults.retries ?? this.retries);
+    const maxAttempts = method === 'GET' || options.retry === true ? retries + 1 : 1;
     let lastError: unknown;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (signal?.aborted) {
+        throw abortedError(signal);
+      }
       try {
-        return await this.attemptRequest(method, url, body, timeout, extraHeaders);
+        return await this.attemptRequest(method, url, body, timeout, options.headers, signal);
       } catch (error) {
         lastError = error;
         // Retry only transient transport/server failures. NetworkError covers
@@ -684,7 +901,7 @@ export class Request {
         if (serverDelay !== undefined && serverDelay > this.retryMaxMs) {
           throw error;
         }
-        await sleep(serverDelay ?? backoff(attempt, this.retryBaseMs, this.retryMaxMs));
+        await sleep(serverDelay ?? backoff(attempt, this.retryBaseMs, this.retryMaxMs), signal);
       }
     }
     throw lastError;
@@ -696,24 +913,14 @@ export class Request {
     body?: BodyInit,
     timeout?: number,
     extraHeaders?: Record<string, string | null>,
+    signal?: AbortSignal,
   ): Promise<Uint8Array> {
     const controller = new AbortController();
     const ms = timeout ?? this.timeout;
     const timer = setTimeout(() => controller.abort(), ms);
+    const unforward = forwardAbort(signal, controller);
 
-    const headers: Record<string, string> = { ...this.headers, 'User-Agent': this.userAgent };
-    for (const [name, value] of Object.entries(extraHeaders ?? {})) {
-      if (value === null) {
-        const wanted = name.toLowerCase();
-        for (const existing of Object.keys(headers)) {
-          if (existing.toLowerCase() === wanted) {
-            delete headers[existing];
-          }
-        }
-      } else {
-        headers[name] = value;
-      }
-    }
+    const headers = this.buildHeaders(url, extraHeaders);
     if (body?.form) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
     } else if (body?.json) {
@@ -736,16 +943,10 @@ export class Request {
       }
       this.handleErrorResponse(response.status, content, response.headers);
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new TimedOutError();
-      }
-      // Typed API errors (from handleErrorResponse) must propagate unchanged.
-      if (error instanceof YandexMusicError) {
-        throw error;
-      }
-      throw new NetworkError(error instanceof Error ? error.message : String(error), { cause: error });
+      throw this.wrapTransportError(error, signal);
     } finally {
       clearTimeout(timer);
+      unforward();
     }
   }
 

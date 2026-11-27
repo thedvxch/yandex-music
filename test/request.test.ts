@@ -196,7 +196,7 @@ test('a custom fetch receives the signed headers and URL', async () => {
     calls.push({ url, headers: init.headers });
     return { status: 200, arrayBuffer: async () => new TextEncoder().encode('{"result":1}').buffer };
   };
-  const r = new Request({ fetch: fetchImpl });
+  const r = new Request({ fetch: fetchImpl, authOrigins: ['http://api'] });
   r.setAuthorization('tok');
   await r.get('http://api/x', { a: 1, b: 2 });
 
@@ -225,7 +225,7 @@ describe('Client option overrides', () => {
 
   test('headers merge onto defaults; client header is overridable', async () => {
     const { calls, fetch } = capturing();
-    const client = new Client({ headers: { 'X-Yandex-Music-Client': 'custom', 'X-Extra': 'y' }, fetch });
+    const client = new Client({ headers: { 'X-Yandex-Music-Client': 'custom', 'X-Extra': 'y' }, fetch, baseUrl: 'http://x' });
     await client.request.get('http://x');
     expect(calls[0]!['X-Yandex-Music-Client']).toBe('custom');
     expect(calls[0]!['X-Extra']).toBe('y');

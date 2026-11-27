@@ -191,6 +191,9 @@ export class RealtimeClient extends EventEmitter {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   /** Reconnect delay ladder (ms) the server last asked for. */
   private serverBackoffMs: number[] | null = null;
+  /** Loop generation: bumped by every start()/stop(), so a loop left suspended
+   * by stop() exits instead of running alongside the next start()'s loop. */
+  private generation = 0;
 
   constructor(opts: RealtimeOptions) {
     super();
@@ -282,25 +285,35 @@ export class RealtimeClient extends EventEmitter {
     this.running = true;
     this.terminal = null;
     this.serverBackoffMs = null;
-    while (this.running) {
+    const gen = ++this.generation;
+    const live = (): boolean => this.running && gen === this.generation;
+    while (live()) {
       const client = new YnisonClient({
         ...this.opts.ynison,
         token: this.opts.token,
         deviceId: this.deviceId,
         deviceInfo: this.opts.deviceInfo ?? null,
       });
-      client.onError((err) => this.safeEmitError(err));
+      client.onError((err) => {
+        if (live()) this.safeEmitError(err);
+      });
       this.current = client;
       this.lastStateAt = Date.now();
       let opened = false;
       let openedAt = 0;
       client.onState((state) => {
+        if (!live()) {
+          return;
+        }
         if (!opened) {
           opened = true;
           openedAt = Date.now();
-          this.emit('open');
+          this.safeEmit('open');
         }
-        void this.handleState(state);
+        // A throwing user listener must never become an unhandled rejection.
+        this.handleState(state).catch((error: unknown) =>
+          this.safeEmitError(error instanceof Error ? error : new Error(String(error))),
+        );
       });
 
       const staleTimer = this.startStaleWatchdog(client);
@@ -326,10 +339,10 @@ export class RealtimeClient extends EventEmitter {
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         settle();
-        if (this.running) {
+        if (live()) {
           this.safeEmitError(err);
         }
-        if (err instanceof YnisonUnauthorizedError || err instanceof YnisonDeviceDisplacedError) {
+        if ((err instanceof YnisonUnauthorizedError || err instanceof YnisonDeviceDisplacedError) && live()) {
           terminal = true;
           this.terminal = err;
         }
@@ -349,18 +362,20 @@ export class RealtimeClient extends EventEmitter {
           clearInterval(staleTimer);
         }
         client.disconnect();
-        this.current = null;
+        if (this.current === client) {
+          this.current = null;
+        }
       }
 
-      if (terminal || !this.running || this.opts.reconnect === false) {
+      if (terminal || !live() || this.opts.reconnect === false) {
         break;
       }
       let wait = delayMs ?? this.backoff();
       if (shortSession) {
         wait = Math.max(wait, Math.min(1000, this.opts.reconnectMaxMs ?? 30_000));
       }
-      this.emit('reconnect', wait);
-      if (!this.running) {
+      this.safeEmit('reconnect', wait);
+      if (!live()) {
         break;
       }
       await new Promise<void>((resolve) => {
@@ -373,8 +388,24 @@ export class RealtimeClient extends EventEmitter {
       });
       this.stopResolve = null;
     }
-    this.running = false;
-    this.emit('close', this.terminal);
+    // A loop superseded by a newer start() must not flip the new loop's state.
+    if (gen === this.generation) {
+      this.running = false;
+    }
+    this.safeEmit('close', gen === this.generation ? this.terminal : null);
+  }
+
+  /**
+   * Emit an event, isolating listener exceptions: `EventEmitter.emit` rethrows a
+   * listener's error synchronously, which would otherwise abort the loop or
+   * surface as an unhandled rejection. The error is routed to `'error'` instead.
+   */
+  private safeEmit<E extends keyof RealtimeEvents>(event: E, ...args: RealtimeEvents[E]): void {
+    try {
+      this.emit(event, ...args);
+    } catch (error) {
+      this.safeEmitError(error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   /**
@@ -385,7 +416,11 @@ export class RealtimeClient extends EventEmitter {
    */
   private safeEmitError(err: Error): void {
     if (this.listenerCount('error') > 0) {
-      this.emit('error', err);
+      try {
+        this.emit('error', err);
+      } catch {
+        /* a throwing error listener is isolated */
+      }
     }
   }
 
@@ -427,6 +462,7 @@ export class RealtimeClient extends EventEmitter {
   /** Stop the realtime loop and close the connection. */
   stop(): void {
     this.running = false;
+    this.generation += 1;
     this.current?.disconnect();
     this.current = null;
     if (this.reconnectTimer !== null) {
@@ -467,7 +503,7 @@ export class RealtimeClient extends EventEmitter {
       const since = client.lastActivityAt || this.lastStateAt;
       const idle = Date.now() - since;
       if (idle > staleMs) {
-        this.emit('stale', idle);
+        this.safeEmit('stale', idle);
         client.disconnect();
       }
     }, tick);
@@ -476,11 +512,11 @@ export class RealtimeClient extends EventEmitter {
   private async handleState(state: YnisonState): Promise<void> {
     this.lastState = state;
     this.lastStateAt = Date.now();
-    this.emit('state', state);
+    this.safeEmit('state', state);
 
     if (this.lastPaused === null || state.paused !== this.lastPaused) {
       this.lastPaused = state.paused;
-      this.emit('playStateChange', state.paused);
+      this.safeEmit('playStateChange', state.paused);
     }
 
     const idx = state.currentPlayableIndex;
@@ -501,7 +537,7 @@ export class RealtimeClient extends EventEmitter {
       if (seq !== this.resolveSeq) return;
       this.lastTrack = track;
       this.lastResolvedPlayableId = playableId;
-      this.emit('trackChange', { playableId, track });
+      this.safeEmit('trackChange', { playableId, track });
     }
   }
 }

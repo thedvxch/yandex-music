@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 import { deList, type UnknownFieldReporter } from './base.js';
-import { Request, type FetchLike } from './request.js';
+import { Request, type FetchLike, type RequestOptions } from './request.js';
 import { IdMissingError } from './exceptions.js';
 import type { Client } from './client.js';
 import type { Status } from './models/account/account.js';
@@ -64,6 +64,13 @@ export interface ClientOptions {
   retryMaxMs?: number;
   /** Default per-request timeout in ms. Defaults to `5000`. Ignored when `request` is supplied. */
   timeout?: number;
+  /**
+   * Extra origins allowed to receive the `Authorization` and
+   * `X-Yandex-Music-Client` headers, besides the `baseUrl` origin. Every other
+   * host (CDN mirrors, lyrics storage, any absolute URL) gets neither header.
+   * Ignored when `request` is supplied (set `RequestInit.authOrigins` there).
+   */
+  authOrigins?: string[];
 }
 
 /** Object types addressable through the batch "list" endpoints. */
@@ -103,8 +110,9 @@ export abstract class ClientBase {
   constructor(options: ClientOptions = {}) {
     // The accessor writes the backing value only; `setClient` below attaches the header.
     let currentToken = options.token;
+    // Non-enumerable: keeps the token out of `JSON.stringify`, spread copies and `console.log`.
     Object.defineProperty(this, 'token', {
-      enumerable: true,
+      enumerable: false,
       configurable: true,
       get: (): string | undefined => currentToken,
       set: (value: string | undefined): void => {
@@ -135,9 +143,55 @@ export abstract class ClientBase {
         retryBaseMs: options.retryBaseMs,
         retryMaxMs: options.retryMaxMs,
         timeout: options.timeout,
+        authOrigins: options.authOrigins,
       });
     }
     this.request.setLanguage(this.language);
+  }
+
+  /**
+   * A view of this client whose requests default to `options` — a caller
+   * `signal`, a per-attempt `timeout` and a `retries` budget. The view shares
+   * the token, transport, account state and configuration with this client;
+   * models it returns keep using the view, so their convenience calls (for
+   * example `DownloadInfo.getDirectLink`) inherit the same options.
+   *
+   * @example
+   * ```ts
+   * const ctrl = new AbortController();
+   * const fast = client.withOptions({ signal: ctrl.signal, timeout: 3000, retries: 0 });
+   * const [track] = await fast.tracks(42);
+   * ```
+   *
+   * @param options - Defaults for every request made through the view.
+   * @returns The view (same type as this client).
+   */
+  withOptions(options: RequestOptions): this {
+    const view = Object.create(this) as this;
+    Object.defineProperty(view, 'request', {
+      value: this.request.withOptions(options),
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    });
+    return view;
+  }
+
+  /** Redacted, cycle-free data view: the token is masked. */
+  toJSON(): Record<string, unknown> {
+    return {
+      baseUrl: this.baseUrl,
+      language: this.language,
+      device: this.device,
+      token: this.token ? '[redacted]' : undefined,
+      accountUid: this.accountUid,
+      request: this.request.toJSON(),
+    };
+  }
+
+  /** `util.inspect` / `console.log` output with the token redacted. */
+  [Symbol.for('nodejs.util.inspect.custom')](): string {
+    return `Client ${JSON.stringify(this.toJSON())}`;
   }
 
   /**

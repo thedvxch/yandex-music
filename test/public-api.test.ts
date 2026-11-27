@@ -55,7 +55,9 @@ describe('mockFetch helper', () => {
   });
 
   it('clientWith builds a client with the injected fetch and a token', async () => {
-    const { client, calls } = clientWith([{ match: '/status', body: { result: { account: { uid: 1 } } } }]);
+    const { client, calls } = clientWith([{ match: '/status', body: { result: { account: { uid: 1 } } } }], {
+      baseUrl: 'https://api.test',
+    });
     expect(client.token).toBe('tok');
     await client.request.get('https://api.test/status').catch(() => undefined);
     expect(calls.length).toBeGreaterThan(0);

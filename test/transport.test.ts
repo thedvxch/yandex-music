@@ -20,7 +20,7 @@ const respond = (status: number, body: unknown, headers?: Record<string, string>
 
 describe('token accessor', () => {
   test('setting the token updates the Authorization header; clearing removes it', async () => {
-    const { client, calls } = clientWith([{ match: '/x', body: { result: 1 } }]);
+    const { client, calls } = clientWith([{ match: '/x', body: { result: 1 } }], { baseUrl: 'http://h' });
     await client.request.get('http://h/x');
     expect(calls[0]!.headers['Authorization']).toBe('OAuth tok');
     client.token = 'b';

@@ -271,14 +271,31 @@ export function assign<T extends object>(target: T, raw: JSONObject, keys: reado
  * requests without the caller threading the client around manually.
  */
 export abstract class YandexMusicModel {
-  /** The client that created this model, used by convenience methods. */
-  client?: Client;
+  /**
+   * The client that created this model, used by convenience methods.
+   *
+   * Non-enumerable: it never shows up in `JSON.stringify`, `Object.keys`, spread
+   * copies or `console.log` output, so serializing or logging a model neither
+   * walks into the transport (and its `Authorization` header) nor hits the
+   * client → request → client cycle.
+   */
+  declare client?: Client;
 
   /**
    * @param client - The owning client, stored for later convenience calls.
    */
   constructor(client?: Client) {
-    this.client = client;
+    Object.defineProperty(this, 'client', { value: client, writable: true, configurable: true, enumerable: false });
+  }
+
+  /**
+   * Plain-data view of the model for `JSON.stringify`: own enumerable fields
+   * only (the {@link YandexMusicModel.client} back-reference is excluded).
+   *
+   * @returns A shallow copy of the model's data fields.
+   */
+  toJSON(): Record<string, unknown> {
+    return { ...(this as object) } as Record<string, unknown>;
   }
 
   /**

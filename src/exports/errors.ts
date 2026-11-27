@@ -12,6 +12,7 @@ export {
   TooManyRequestsError,
   ServerError,
   TimedOutError,
+  AbortedError,
   DeviceAuthError,
   YnisonError,
   YnisonServerError,

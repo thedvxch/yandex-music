@@ -63,6 +63,17 @@ export class TooManyRequestsError extends NetworkError {}
 /** Raised on server-side failures (HTTP 5xx). Retryable. */
 export class ServerError extends NetworkError {}
 
+/**
+ * Raised when the caller cancels an operation through an `AbortSignal`
+ * (see `RequestOptions.signal`). Never retried; distinct from {@link TimedOutError}.
+ * The signal's `reason` is kept as `cause`.
+ */
+export class AbortedError extends YandexMusicError {
+  constructor(message = 'Aborted', options?: { cause?: unknown }) {
+    super(message, options);
+  }
+}
+
 /** Raised when a request exceeds its timeout. */
 export class TimedOutError extends NetworkError {
   constructor(message = 'Timed out') {

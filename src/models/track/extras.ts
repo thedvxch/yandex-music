@@ -6,11 +6,16 @@
 import { createHash, createDecipheriv, type Decipher } from 'node:crypto';
 import type { Transform } from 'node:stream';
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { AbortedError } from '../../exceptions.js';
 import { LyricsMajor } from './nested.js';
 import { Track } from './track.js';
 import { Artist } from '../artist/artist.js';
 import type { Client } from '../../client.js';
+import type { RequestOptions } from '../../request.js';
 import type { JSONValue } from '../../types.js';
+
+/** Options for the download helpers: a caller `signal` and an overall `timeout` (ms). */
+export type DownloadOptions = Pick<RequestOptions, 'signal' | 'timeout'>;
 
 /** Salt used to sign direct download links. */
 const SIGN_SALT = 'XGRlBW9FXlekgbPrRHuSiA';
@@ -79,14 +84,15 @@ export class DownloadInfo extends YandexMusicModel {
    * The resolved URL is valid for roughly one minute; requesting it later yields
    * an HTTP 410. The result is cached in {@link DownloadInfo.directLink}.
    *
+   * @param options - Optional `signal` / `timeout`.
    * @returns The direct download URL.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async getDirectLink(): Promise<string> {
+  async getDirectLink(options: DownloadOptions = {}): Promise<string> {
     if (!this.downloadInfoUrl) {
       throw new Error('DownloadInfo has no downloadInfoUrl.');
     }
-    const bytes = await this.requireClient().request.retrieve(this.downloadInfoUrl);
+    const bytes = await this.requireClient().request.retrieve(this.downloadInfoUrl, undefined, options);
     const xml = new TextDecoder('utf-8').decode(bytes);
     const host = xmlTagText(xml, 'host');
     const path = xmlTagText(xml, 'path');
@@ -102,23 +108,25 @@ export class DownloadInfo extends YandexMusicModel {
   /**
    * Download the track and return it as bytes.
    *
+   * @param options - Optional `signal` / `timeout`.
    * @returns The audio file contents.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async downloadBytes(): Promise<Uint8Array> {
-    const link = this.directLink ?? (await this.getDirectLink());
-    return this.requireClient().request.retrieve(link);
+  async downloadBytes(options: DownloadOptions = {}): Promise<Uint8Array> {
+    const link = this.directLink ?? (await this.getDirectLink({ signal: options.signal }));
+    return this.requireClient().request.retrieve(link, options.timeout, { signal: options.signal });
   }
 
   /**
    * Download the track straight to a file on disk.
    *
    * @param filename - Destination path, including extension.
+   * @param options - Optional `signal` / `timeout`.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async download(filename: string): Promise<void> {
-    const link = this.directLink ?? (await this.getDirectLink());
-    await this.requireClient().request.download(link, filename);
+  async download(filename: string, options: DownloadOptions = {}): Promise<void> {
+    const link = this.directLink ?? (await this.getDirectLink({ signal: options.signal }));
+    await this.requireClient().request.streamToFile(link, filename, options);
   }
 }
 
@@ -250,11 +258,12 @@ export class LosslessDownloadInfo extends YandexMusicModel {
    * `/get-file-info` returns several mirror URLs on different CDN hosts; this
    * tries each in order so a single flaky host doesn't fail the download.
    *
+   * @param options - Optional `signal` / `timeout`.
    * @returns The decoded audio file contents.
    * @throws {YandexMusicError} On any transport or API error (the last one, after
    *   every candidate URL fails).
    */
-  async downloadBytes(): Promise<Uint8Array> {
+  async downloadBytes(options: DownloadOptions = {}): Promise<Uint8Array> {
     const links = this.links();
     if (links.length === 0) {
       throw new Error('LosslessDownloadInfo has no stream URL.');
@@ -263,10 +272,13 @@ export class LosslessDownloadInfo extends YandexMusicModel {
     let lastError: unknown;
     for (const link of links) {
       try {
-        const bytes = await request.retrieve(link);
+        const bytes = await request.retrieve(link, options.timeout, { signal: options.signal });
         return this.isEncrypted ? decryptEncraw(bytes, this.key!) : bytes;
       } catch (error) {
         lastError = error;
+        if (error instanceof AbortedError) {
+          break;
+        }
       }
     }
     throw lastError;
@@ -283,11 +295,12 @@ export class LosslessDownloadInfo extends YandexMusicModel {
    * @param filename - Destination path, including extension.
    * @param options - Set `race: true` to race all mirror URLs and commit to the
    *   fastest responder (cuts tail latency when a host is slow; falls back to
-   *   sequential on failure). Defaults to sequential mirror failover.
+   *   sequential on failure). Defaults to sequential mirror failover. `signal`
+   *   cancels the download, `timeout` caps it (ms).
    * @throws {YandexMusicError} On any transport or API error (the last one, after
    *   every candidate URL fails).
    */
-  async download(filename: string, options: { race?: boolean } = {}): Promise<void> {
+  async download(filename: string, options: DownloadOptions & { race?: boolean } = {}): Promise<void> {
     const links = this.links();
     if (links.length === 0) {
       throw new Error('LosslessDownloadInfo has no stream URL.');
@@ -295,16 +308,20 @@ export class LosslessDownloadInfo extends YandexMusicModel {
     const request = this.requireClient().request;
     const key = this.isEncrypted ? this.key : undefined;
     const transform = key ? (): Transform => encrawDecipher(key) : undefined;
+    const stream = { transform, signal: options.signal, timeout: options.timeout };
     if (options.race) {
-      return request.raceToFile(links, filename, { transform });
+      return request.raceToFile(links, filename, stream);
     }
     let lastError: unknown;
     for (const link of links) {
       try {
-        await request.streamToFile(link, filename, { transform });
+        await request.streamToFile(link, filename, stream);
         return;
       } catch (error) {
         lastError = error;
+        if (error instanceof AbortedError) {
+          break;
+        }
       }
     }
     throw lastError;
@@ -364,14 +381,15 @@ export class TrackLyrics extends YandexMusicModel {
   /**
    * Fetch the raw lyrics text (plain or LRC, matching the requested format).
    *
+   * @param options - Optional `signal` / `timeout`.
    * @returns The lyrics text.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async fetchLyrics(): Promise<string> {
+  async fetchLyrics(options: DownloadOptions = {}): Promise<string> {
     if (!this.downloadUrl) {
       throw new Error('TrackLyrics has no downloadUrl.');
     }
-    const bytes = await this.requireClient().request.retrieve(this.downloadUrl);
+    const bytes = await this.requireClient().request.retrieve(this.downloadUrl, options.timeout, { signal: options.signal });
     return new TextDecoder('utf-8').decode(bytes);
   }
 }

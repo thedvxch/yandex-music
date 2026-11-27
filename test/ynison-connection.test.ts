@@ -277,6 +277,58 @@ describe('reconnect policy', () => {
   });
 });
 
+describe('listener isolation and restart (H3, H4)', () => {
+  test('throwing state / trackChange / playStateChange listeners cause no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const rt = realtime();
+      const errors: Error[] = [];
+      rt.on('error', (e) => errors.push(e));
+      rt.on('state', () => {
+        throw new Error('state listener');
+      });
+      rt.on('playStateChange', () => {
+        throw new Error('play listener');
+      });
+      rt.on('trackChange', () => {
+        throw new Error('track listener');
+      });
+      const done = rt.start();
+      await vi.waitFor(() => expect(errors.map((e) => e.message)).toContain('track listener'), { timeout: 2000 });
+      rt.stop();
+      await done;
+      await new Promise((r) => setTimeout(r, 20));
+      expect(errors.map((e) => e.message)).toEqual(expect.arrayContaining(['state listener', 'play listener']));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  test('stop() then start() back-to-back leaves exactly one live session loop', async () => {
+    const rt = realtime();
+    const first = rt.start();
+    await waitEvent(rt, 'open');
+    expect(server.stateCount).toBe(1);
+    rt.stop();
+    const second = rt.start();
+    await waitEvent(rt, 'open');
+    // the superseded loop must not reconnect (default first delay is 0..250 ms)
+    await new Promise((r) => setTimeout(r, 600));
+    expect(server.stateCount).toBe(2);
+    expect(rt.isRunning).toBe(true);
+    await first;
+    expect(rt.isRunning).toBe(true);
+    rt.stop();
+    await second;
+    expect(rt.isRunning).toBe(false);
+  });
+});
+
 describe('YnisonClient robustness', () => {
   test('a server that accepts but never answers gives YnisonTimeoutError', async () => {
     server.stateScripts.push(stayInSilence);

@@ -8,7 +8,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { ClientBase } from '../clientBase.js';
-import { BadRequestError, DeviceAuthError } from '../exceptions.js';
+import { AbortedError, BadRequestError, DeviceAuthError } from '../exceptions.js';
 import { DeviceCode, OAuthToken } from '../models/deviceAuth.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
@@ -30,6 +30,8 @@ export interface DeviceAuthOptions {
   timeout?: number;
   /** Return `true` to abort polling early. */
   shouldCancel?: () => boolean;
+  /** Cancels the flow (including the sleep between polls) with {@link AbortedError}. */
+  signal?: AbortSignal;
   /** Device id. Defaults to a random 10-character string. */
   deviceId?: string;
   /** Human-readable device name. Defaults to `YandexMusicAPI`. */
@@ -62,7 +64,20 @@ export type PollOutcome = OAuthToken | 'pending' | 'slow_down';
 const hasOAuthError = (error: unknown, name: string): boolean =>
   error instanceof BadRequestError && (error.code === name || error.message.includes(name));
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** Sleep for `ms`; rejects with {@link AbortedError} as soon as `signal` aborts. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new AbortedError(undefined, { cause: signal?.reason }));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
 /**
  * Adds OAuth Device Flow endpoints to the client.
@@ -220,6 +235,9 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
       const deadline = lifetimeMs > 0 ? Date.now() + lifetimeMs : Number.POSITIVE_INFINITY;
 
       for (;;) {
+        if (options.signal?.aborted) {
+          throw new AbortedError(undefined, { cause: options.signal.reason });
+        }
         if (options.shouldCancel?.()) {
           throw new DeviceAuthError('device authorization cancelled');
         }
@@ -237,7 +255,7 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
         if (Date.now() + intervalMs >= deadline) {
           throw new DeviceAuthError('device authorization expired');
         }
-        await sleep(intervalMs);
+        await sleep(intervalMs, options.signal);
       }
     }
   }
