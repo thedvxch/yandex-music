@@ -117,8 +117,9 @@ so methods that default to the current user (`usersLikes*`, `usersPlaylists*`,
 - **Typed errors.** Every failure derives from `YandexMusicError`; network
   failures additionally derive from `NetworkError` (`BadRequestError`,
   `NotFoundError`, `TimedOutError`, `UnauthorizedError`).
-- **Never `JSON.stringify` a model** — it carries a back-reference to the client
-  (a cyclic structure). Read fields directly instead.
+- **Models are safe to serialize and log.** A model's `client` reference and
+  `client.token` are non-enumerable, `JSON.stringify(track)` returns plain data,
+  and `console.log(client)` masks the token.
 
 ## Configuration
 
@@ -156,6 +157,10 @@ set separately via `client.realtime({ deviceInfo })`.
 | `retries` | retries for transient GET failures (default 2, 0 = off) |
 | `retryBaseMs` / `retryMaxMs` | initial and maximum retry backoff in ms (default 300 / 4000) |
 | `timeout` | default per-request timeout in ms (default 5000; ignored when `request` is supplied) |
+| `bodyTimeout` | budget for reading the body after the headers, in ms (default 30000; effective `max(timeout, bodyTimeout)`) |
+| `authOrigins` | extra origins allowed to receive `Authorization` and `X-Yandex-Music-Client` (the `baseUrl` origin and `https://api.music.yandex.net` always are) |
+| `onUnauthorized` | `(error) => newToken`: called on `401`; the token is replaced and the request repeated once (single flight) |
+| `clientHeader` | the `X-Yandex-Music-Client` value (default `YandexMusicAndroid/26111171`) |
 | `reportUnknownFields` | surface API fields the models don't yet map |
 | `onUnknownField` | hook to use instead of `console.warn` for the same drift |
 | `request` | a fully pre-configured transport (overrides `userAgent`/`headers`/`fetch`) |
@@ -203,9 +208,22 @@ retried like `GET`.
 `YandexMusicError` carries `status` (the HTTP code), `code` (a machine-readable
 code from the body, for example the OAuth `error` field) and `retryAfterMs`:
 
-- `429` raises `TooManyRequestsError` and `5xx` (except `502`) raises
-  `ServerError`; both extend `NetworkError`. `502` stays
-  `NetworkError('Bad Gateway')` with `status` 502.
+- Exactly the errors with `error.retryable === true` are retried: transport
+  failures, timeouts and the statuses `408`/`425`/`429`/`5xx`. Every other `4xx`
+  is final and sent once.
+- `429` raises `TooManyRequestsError`, `5xx` raises `ServerError`, `502` raises
+  `BadGatewayError` (a `ServerError`; the message is still `Bad Gateway`). All
+  extend `NetworkError`.
+- `401` raises `UnauthorizedError`, `403` raises `ForbiddenError` (a subclass of
+  `UnauthorizedError`, so existing `instanceof UnauthorizedError` checks still
+  match). Refresh a token only on `401`: `!(e instanceof ForbiddenError)`.
+- `404` raises `NotFoundError`, `410` raises `GoneError`, any other `4xx` raises
+  `ClientError` (all subclasses of `NetworkError`).
+- A `2xx` body with `error` and no `result`, or malformed JSON/XML, raises
+  `InvalidResponseError`.
+- Disk and decryption failures are `YandexMusicError` with `retryable: false`
+  (not `NetworkError`); they are not retried and stop the mirror loop.
+- Cancelling through `signal` raises `AbortedError` (never retried, not a `TimedOutError`).
 - `429` and `503` honour the `Retry-After` header: the pause comes from it, and a
   delay above `retryMaxMs` throws immediately instead of waiting.
 - A non-JSON error body produces a message of the form `HTTP <status>: <first 200 chars>`.
@@ -233,6 +251,35 @@ with the `timeout` option; a single request can override it through
 support: pass a proxy-aware `fetch`. The Android `proxyUrl` option is deprecated
 (it was never applied).
 
+### Cancellation, timeouts and token refresh
+
+- `client.withOptions({ signal, timeout, deadline, retries })` returns a view of the client
+  that shares its token, transport and account state and applies these options to every request.
+  Models obtained through the view inherit them (for example `DownloadInfo.getDirectLink`).
+  `signal` aborts both the request and the pause between retries (`AbortedError`).
+- `client.request.send(method, url, { signal, timeout, retries })` takes the same
+  options; downloads take `info.download(path, { signal, timeout })`,
+  `downloadBytes` and `fetchLyrics`; `deviceAuth(onCode, { signal })`.
+- `timeout` bounds the time until the response headers; the body is read within
+  `max(timeout, bodyTimeout)`. `retrieve()` uses the JSON timeout by default.
+  `deadline` is a hard cap on the whole call (every attempt, the body read and
+  the backoff); it rejects with `TimedOutError`.
+- `Authorization` and `X-Yandex-Music-Client` go only to the `baseUrl` origin,
+  `https://api.music.yandex.net` and `authOrigins`: CDN mirrors, lyrics storage and any foreign URL get neither.
+- A download is written to a `*.part` file next to the target and renamed on
+  success: a failure leaves an existing file untouched.
+- `DownloadInfo.directLink` lives for `DIRECT_LINK_TTL_MS` (50 s); `download()`
+  resolves a stale link again and retries once after `403`/`410`.
+
+```ts
+const client = new Client({
+  token,
+  onUnauthorized: async () => (await client.refreshAccessToken(storedRefreshToken)).accessToken,
+});
+const ctrl = new AbortController();
+const [track] = await client.withOptions({ signal: ctrl.signal, retries: 0 }).tracks(42);
+```
+
 ### API drift: `reportUnknown`
 
 The `onUnknownField` hook receives `{ model, fields, raw, shapes }`. `fields` are
@@ -246,14 +293,14 @@ itself is not included.
 | Domain      | Methods |
 | ----------- | ------- |
 | account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
-| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksFileInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `playAudio`, `afterTrack` |
+| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksFileInfo`, `tracksFileInfoBatch`, `tracksFileInfoV2`, `tracksFileInfoBatchV2`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `playAudio`, `afterTrack` |
 | albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer` |
 | artists     | `artists`, `artistsBriefInfo`, `artistsInfo`, `artistsAbout`, `artistsClips`, `artistsDonation`, `artistsSkeleton`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
 | likes       | `usersLikesTracks`/`Albums`/`Artists`/`Playlists`/`Clips` + add/remove for each, `usersLikesArtistsWithTimestamps`; `usersDislikesTracks`/`Artists` + add/remove |
 | playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `usersSettings`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (blocking flow), `refreshAccessToken` (renew via refresh token) |
-| landing     | `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
+| landing     | `landingSkeleton`, `landingBlockSource`, `landingBlockChart`, `landingBlocksWaves`/`Artists`/`InStyle`/`NewPlaylists`/`NewReleases`/`PersonalPlaylists`, `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+`rotorStationFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip` shortcuts), `rotorStationSettings2`, `rotorStationStream`, `rotorStationStreamFeedback`, `rotorWaveSettings`, `rotorWaveLast`, `rotorWaveLastReset`, `rotorSessionNew`, `rotorSessionClone`, `rotorSessionTracks`, `rotorSessionFeedback` (+`rotorSessionFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip` shortcuts), `rotorSessionFeedbacks`, `rotorSessionsFeedbacks`, `rotorCombinedSessionNew`, `rotorCombinedSessionNext`, `rotorCombinedSessionLanding` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |
 | history     | `musicHistory`, `musicHistoryItems` |
@@ -264,7 +311,7 @@ itself is not included.
 | metatags    | `metatags`, `metatag`, `metatagAlbums`, `metatagArtists`, `metatagPlaylists` |
 | pins        | `pins`, `pin{Album,Artist,Playlist,Wave}`, `unpin{Album,Artist,Playlist,Wave}` |
 | presaves    | `usersPresaves`, `usersPresavesAdd`, `usersPresavesRemove` |
-| concerts    | `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
+| concerts    | `concertsLandingPersonal`, `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
 | realtime    | `client.realtime()` → `RealtimeClient` (Ynison; needs `ws`): events, `nowPlaying`, commands `pause`/`resume`/`nextTrack`/`previousTrack`/`setVolume` |
 
 ### Downloads and quality
@@ -282,7 +329,7 @@ Lossless (FLAC) goes through a separate path, the signed `get-file-info` endpoin
 
 - `tracksFileInfo(trackId, { quality, codecs, transport, signKey, clientHeader })` /
   `track.getFileInfo(options)` returns a `FileInfo` whose `downloadInfo` is a
-  `LosslessDownloadInfo`. `quality` is `lossless` (default), `hq` or `nq`; the
+  `LosslessDownloadInfo`. `quality` is `lossless` (default), `hq`, `nq`, `lq`, `preview` or `smart_preview`; the
   default transport is `raw` (a plain stream).
 - `tracksLosslessInfo(trackId, quality, options)` /
   `track.getLosslessInfo(quality)` returns the `LosslessDownloadInfo` directly and
@@ -337,6 +384,17 @@ if (np?.track) {
 rotate it per reconnect**: Ynison dedupes its broadcast by device, so a fresh id
 drops your observer from the fan-out and the state silently freezes. The `state` /
 `lastStateAgeMs` / `liveProgressMs()` getters give the rest of the snapshot for `/health`.
+
+### Ynison token and reconnects
+
+- `client.realtime()` reads `client.token` before every reconnect, so a rotated
+  token reaches Ynison too. `RealtimeOptions.token` may be a function. When the
+  token is rejected, the client tries one fresh token (from the provider or
+  `onUnauthorized`) before it stops.
+- Codes `300100001`/`300100002` (the session moved to another host) raise
+  `YnisonRebalancedError`; the first reconnect goes through the redirector at once.
+- Android identity: `ANDROID_DEVICE_INFO` reports `appVersion` `2026.11.1`
+  (`YNISON_ANDROID_APP_VERSION`); `androidDeviceInfo({ appVersion })` sets another.
 
 ### Ynison commands
 

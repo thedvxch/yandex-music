@@ -3,6 +3,172 @@
 All notable changes to `@dvxch/yandex-music` are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.4.1 - 2026-11-27
+
+Security and reliability overhaul driven by a code review, plus endpoints found in
+the current web client. Every 0.4.0 export is still exported. Behaviour changes
+are listed under "Changed"; read them before upgrading.
+
+### Security
+
+- `Authorization` and `X-Yandex-Music-Client` are sent only to the `baseUrl`
+  origin, to `DEFAULT_API_ORIGIN` (`https://api.music.yandex.net`, always, so
+  absolute API URLs such as the download-info XML keep the token behind a proxy
+  `baseUrl`) and to the new `ClientOptions.authOrigins` /
+  `RequestInit.authOrigins`. CDN mirrors, lyrics
+  storage and any other URL passed to `retrieve`, `download`, `streamToFile` or
+  `raceToFile` no longer receive the OAuth token. An explicit per-call header is
+  still honoured.
+- `YandexMusicModel.client`, `Request.client` and `ClientBase.token` are
+  non-enumerable. `YandexMusicModel.toJSON()` returns the data fields, so
+  `JSON.stringify(track)` works (it threw on the client cycle) and spread copies
+  no longer carry the client. `Client` and `Request` have a redacting `toJSON()`
+  and `util.inspect` output, so `console.log(client)` does not print the token.
+- Path parameters are encoded with `pathSegment()` (`encodeURIComponent`, keeping
+  `:`, `,` and `@`; dot segments encoded), so an id such as `1/../account` cannot
+  change which authenticated endpoint is called.
+
+### Added
+
+- Cancellation and per-call options: `RequestOptions { signal, timeout,
+  deadline, retries }` on `Request.send` and the verb helpers,
+  `client.withOptions(options)` and `Request.withOptions(options)` (views that
+  share token, transport, account state and configuration with the parent in
+  both directions, so `view.init()` sets `me` / `accountUid` on the parent;
+  models returned through a view keep using it). `deadline` is a hard cap on the
+  whole call (every attempt including the body read, the backoff sleeps and the
+  401 repeat) and rejects with `TimedOutError`. The backoff sleep is abortable.
+  New `AbortedError` (never retried, distinct from `TimedOutError`). Download
+  helpers take `{ signal, timeout }` (`DownloadInfo.download`, `downloadBytes`,
+  `getDirectLink`; `LosslessDownloadInfo.download`, `downloadBytes`;
+  `TrackLyrics.fetchLyrics`); `deviceAuth` takes `signal`.
+- Token refresh: `ClientOptions.onUnauthorized(error) => token`. Called on HTTP
+  401 (never on 403, nor for a request with its own per-call `Authorization`
+  header), single flight across concurrent requests; the request is repeated
+  once with the new token. `RealtimeOptions.token` accepts a provider
+  function (`TokenSource`) evaluated on every reconnect, plus
+  `RealtimeOptions.onUnauthorized`; `client.realtime()` wires both to the client.
+- Errors: `YandexMusicError.retryable`, `isRetryableStatus()`, `ClientError`
+  (4xx), `GoneError` (410), `ForbiddenError` (403, extends `UnauthorizedError`),
+  `BadGatewayError` (502, extends `ServerError`), `InvalidResponseError`,
+  `YnisonRebalancedError`.
+- File info: `tracksFileInfoBatch(ids, options)` (`GET /get-file-info/batch`),
+  `tracksFileInfoV2(id, options)` (`GET /resources/v2/file-info`) and
+  `tracksFileInfoBatchV2(ids, options)`. Batch requests sign the comma-joined id
+  list. `LosslessDownloadInfo.r128`. `FileInfoQuality` adds `lq`, `preview` and
+  `smart_preview`.
+- `tracksDownloadInfo(id, getDirectLinks, { antiAdParams })` and
+  `DOWNLOAD_INFO_ANTI_AD_PARAMS`; see "Changed".
+- Landing: `landingBlocksWaves`, `landingBlocksArtists`, `landingBlocksInStyle`,
+  `landingBlocksNewPlaylists`, `landingBlocksNewReleases`,
+  `landingBlocksPersonalPlaylists`, `landingSkeleton(id, { showWizard,
+  locations })`, `landingBlockSource(source, params)` (generic skeleton block
+  fetch, restricted to the `baseUrl` origin) and `landingBlockChart()`. Concerts:
+  `concertsLandingPersonal()`. Models `LandingWaves`, `LandingWaveGroup`,
+  `LandingWaveItem`, `LandingBlockItems`, `LandingBlockItem`,
+  `LandingBlockItemData`, `LandingAlbumItem`, `LandingNewReleases`,
+  `LandingInStyle`, `InStyleTab`, `LandingSkeleton`, `PersonalConcerts`. Shapes
+  verified against the live API on 2026-11-27.
+- `DownloadInfo.directLinkResolvedAt`, `DownloadInfo.directLinkExpired`,
+  `DIRECT_LINK_TTL_MS` (50 s).
+- `About.geoRegionIso`, `About.userSessionRegionIso`; `OAuthToken.expiresAt`.
+- Transport: `ClientOptions.bodyTimeout` / `RequestInit.bodyTimeout`
+  (`DEFAULT_BODY_TIMEOUT_MS` = 30000), `ClientOptions.clientHeader`,
+  `DEFAULT_CLIENT_HEADER`, `Request.isAuthOrigin()`; `DEFAULT_DOWNLOAD_TIMEOUT_MS` and
+  `DEFAULT_DOWNLOAD_IDLE_MS` are exported (pass the former to `retrieve()` for audio).
+- Ynison: `YnisonClient.disconnect({ force })` (terminate instead of a close
+  handshake), `YNISON_ANDROID_APP_VERSION`, `androidDeviceInfo(overrides)`,
+  `resolveToken()`.
+- Package: `exports` has a `default` condition and `./package.json`.
+
+### Changed
+
+- Retries follow `error.retryable`: transport failures, timeouts and HTTP
+  408/425/429/5xx. Other 4xx (405, 410, 422, 451, …) are final and sent once
+  (0.4.0 retried them as plain `NetworkError`). They raise `ClientError` (or
+  `GoneError` for 410). `BadRequestError`, `NotFoundError`, `ConflictError` and
+  `PayloadTooLargeError` now extend `ClientError` (still `NetworkError`).
+- HTTP 403 raises `ForbiddenError`. It extends `UnauthorizedError`, so existing
+  `instanceof UnauthorizedError` checks still match; refresh a token only on 401.
+- HTTP 502 raises `BadGatewayError` (a `ServerError` and a `NetworkError`; the
+  message is still `Bad Gateway`, `name` is now `BadGatewayError`).
+  `instanceof ServerError` now matches 502, and 502 honours `Retry-After`.
+- A 2xx body with an `error` key and no `result` raises `InvalidResponseError`
+  (0.4.0 returned it as data). Malformed JSON also raises `InvalidResponseError`
+  (a `YandexMusicError`, as before).
+- Downloads are written to `<file>.<id>.part` and renamed on success. A failed
+  download no longer deletes an existing file at the destination.
+- `Request.retrieve()` defaults to the JSON timeout (was the 300 s download
+  timeout). `DownloadInfo.downloadBytes` and `LosslessDownloadInfo.downloadBytes`
+  still pass the download timeout. Callers that buffer audio through `retrieve()`
+  must pass a timeout.
+- `timeout` now bounds the time until response headers; the body is read within
+  `max(timeout, bodyTimeout)` (default 30 s). Large JSON on slow links no longer
+  fails at 5 s. `withOptions({ timeout: 2000 })` is therefore no hard cap (about
+  32 s worst case); use `deadline` for one.
+- `tracksDownloadInfo` sends `from=web-main&external-domain=music.yandex.ru&
+  overloading=false` by default (avoids an advertisement returned instead of the
+  track, MarshalX/yandex-music-api#675). Pass `{ antiAdParams: false }` for the
+  old request.
+- `DownloadInfo.download` and `downloadBytes` reuse a cached `directLink` for at
+  most 50 s and resolve it again once after a 403/410.
+- `getDirectLink()` validates the download-info XML (attributes on tags are
+  accepted) and throws `InvalidResponseError` with a snippet instead of building
+  `https:///get-mp3/...`.
+- Every error the library throws is a `YandexMusicError`: a track without an id
+  raises `IdMissingError`, missing URLs raise `InvalidResponseError`, a model
+  without a client raises `YandexMusicError` (all were plain `Error`).
+  File-system and crypto failures raise `YandexMusicError` with
+  `retryable: false` (were `NetworkError`) and stop the mirror loop and the race
+  fallback. `EACCES` / `EPERM` are final even when a custom fetch throws them;
+  `EMFILE` / `ENFILE` (descriptor exhaustion) are transient and stay a
+  retryable `NetworkError`.
+- `DeviceAuthError` keeps `code` (for example `invalid_grant`), `status` and
+  `cause`; a 401 from the OAuth host (`invalid_client`) raises `DeviceAuthError`.
+- Default `X-Yandex-Music-Client` is `YandexMusicAndroid/26111171` (Android
+  2026.11.1, was `YandexMusicAndroid/24023621`); `ANDROID_DEVICE_INFO.appVersion`
+  is `2026.11.1` (was `2026.05.3`).
+- `retries` below 0, `NaN` and `Infinity` count as 0 (a negative value used to
+  throw `undefined`); fractional values are floored.
+- `client.language` is an accessor: assigning it updates `Accept-Language`.
+- `Request.setClient()` with a token-less client clears an `Authorization` left
+  by a previous client of a reused transport; a header the caller set on a fresh
+  `Request` is kept (as in 0.4.0).
+- `LosslessDownloadInfo.download` and `downloadBytes` share one `timeout`
+  deadline across all mirrors (and retries), as `race: true` already did; each
+  mirror used to get the full timeout.
+- `DownloadInfo.deListAsync(…, true)` resolves direct links in parallel.
+
+### Fixed
+
+- `RealtimeClient`: a throwing `state`, `trackChange`, `playStateChange`, `open`
+  or `reconnect` listener no longer becomes an unhandled rejection (which crashes
+  Node); the error goes to `error`. `stop()` followed by `start()` no longer
+  leaves the old loop reconnecting next to the new one (two sessions with one
+  device id displaced each other).
+- `YnisonClient` dispatches a frame over a snapshot of its listeners, so
+  `waitFirstState()` unsubscribing no longer makes the next listener miss the
+  first frame. `waitFirstState()` resolves at once when a frame already arrived.
+- The stale watchdog terminates the socket instead of waiting up to 30 s for a
+  close handshake on a dead pipe.
+- Ynison codes `300100001` / `300100002` (session moved to another host)
+  reconnect through the redirector at once; a repeated one uses the normal
+  backoff.
+- After `client.token` changes, `client.realtime()` reconnects with the new token
+  instead of stopping with a terminal `YnisonUnauthorizedError`.
+- Ynison command version ids use all 18 digits (`Math.random() * 1e18` left the
+  low digits zero).
+- `RealtimeClient`: a token provider that throws is handled like a connect
+  failure (`error`, then backoff, or `close` with `reconnect: false`) instead of
+  rejecting `start()` and leaving the client stuck as running. After an
+  `onUnauthorized` refresh the next connect uses the refreshed token even when
+  the provider still returns the old one. A loop superseded by `stop(); start()`
+  no longer emits `close` next to the running one.
+- An `onUnauthorized` hook that throws synchronously no longer disables token
+  refresh for the rest of the client's life.
+- `landingBlockSource()` resolves a relative uri such as `landing/block/chart`
+  against `baseUrl` (it was passed to `fetch` as is and failed as "Invalid URL").
+
 ## 0.4.0
 
 Parity pass with MarshalX/yandex-music-api 3.2.2. The change is additive: every

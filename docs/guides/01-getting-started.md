@@ -77,7 +77,9 @@ try {
 
 У ошибок есть поля `status` (HTTP-код), `code` (машинный код из тела, например `error`
 OAuth) и `retryAfterMs` (подсказка из `Retry-After`). `429` даёт
-`TooManyRequestsError`, `5xx` (кроме `502`) — `ServerError`; обе наследуют
-`NetworkError`. На `429`/`503` библиотека ждёт `Retry-After`, но если пауза больше
+`TooManyRequestsError`, `5xx` — `ServerError` (`502` — `BadGatewayError`), `403` —
+`ForbiddenError` (подкласс `UnauthorizedError`), `410` — `GoneError`, прочие `4xx` —
+`ClientError`; все сетевые наследуют `NetworkError`. Повторяются только ошибки с
+`error.retryable === true`. На `429`/`503` библиотека ждёт `Retry-After`, но если пауза больше
 `retryMaxMs`, ошибка бросается сразу. Если у метода нужен user id, а `init()` не
 вызывался, бросается `IdMissingError` — до любого запроса.

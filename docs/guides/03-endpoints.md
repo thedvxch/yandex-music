@@ -16,14 +16,14 @@ group: Документация
 | Домен       | Методы |
 | ----------- | ------- |
 | account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `usersSettings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
-| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksFileInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `tracksCredits`, `tracksDisclaimer`, `playAudio`, `afterTrack` |
+| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksFileInfo`, `tracksFileInfoBatch`, `tracksFileInfoV2`, `tracksFileInfoBatchV2`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `tracksCredits`, `tracksDisclaimer`, `playAudio`, `afterTrack` |
 | albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer`, `albumsDisclaimer` |
 | artists     | `artists`, `artistsBriefInfo`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
 | likes       | `usersLikesTracks` + add/remove для треков, артистов, альбомов, плейлистов, клипов; `usersLikesArtistsWithTimestamps`; `usersDislikesTracks`/`Artists` + add/remove |
 | playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (блокирующий flow), `refreshAccessToken` (обновление по refresh-токену) |
-| landing     | `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
+| landing     | `landingSkeleton`, `landingBlockSource`, `landingBlockChart`, `landingBlocksWaves`/`Artists`/`InStyle`/`NewPlaylists`/`NewReleases`/`PersonalPlaylists`, `landing`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+ шорткаты `rotorStationFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip`), `rotorStationSettings2`, `rotorStationStream`, `rotorStationStreamFeedback`, `rotorWaveSettings`, `rotorSessionNew`, `rotorSessionClone`, `rotorSessionTracks`, `rotorSessionFeedback*`, `rotorSessionsFeedbacks`, `rotorCombinedSession*` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |
 | history     | `musicHistory`, `musicHistoryItems` |
@@ -34,7 +34,7 @@ group: Документация
 | metatags    | `metatags`, `metatag`, `metatagAlbums`, `metatagArtists`, `metatagPlaylists` |
 | pins        | `pins`, `pin{Album,Artist,Playlist,Wave}`, `unpin{Album,Artist,Playlist,Wave}` |
 | presaves    | `usersPresaves`, `usersPresavesAdd`, `usersPresavesRemove` |
-| concerts    | `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
+| concerts    | `concertsLandingPersonal`, `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
 | realtime    | `client.realtime()` → `RealtimeClient` (Ynison; нужен `ws`) |
 
 ## Скачивание и качество
@@ -206,6 +206,19 @@ await info?.download('track.flac');
 | `nonMusicNewEpisodes` | `GET /non-music/new-episodes` | TS-only (unverified) | — |
 | `landingRecentlyPlayed` | `GET /landing-blocks/recently-played` | TS-only (unverified) | — |
 | `landingMixes` | `GET /landing/block/mixes` | TS-only (unverified) | — |
+| `landingBlocksWaves` | `GET /landing-blocks/waves` | live-verified 2026-11-27 | — |
+| `landingBlocksArtists` | `GET /landing-blocks/artists` | live-verified 2026-11-27 | — |
+| `landingBlocksInStyle` | `GET /landing-blocks/in-style` | live-verified 2026-11-27 | — |
+| `landingBlocksNewPlaylists` | `GET /landing-blocks/new-playlists` | live-verified 2026-11-27 | — |
+| `landingBlocksNewReleases` | `GET /landing-blocks/new-releases` | live-verified 2026-11-27 | — |
+| `landingBlocksPersonalPlaylists` | `GET /landing-blocks/personal-playlists` | live-verified 2026-11-27 | — |
+| `landingSkeleton` | `GET /landing/skeleton/{id}` | live-verified 2026-11-27 | `showWizard`, `locations` |
+| `landingBlockSource` | `GET {block.data.source.uri}` | live-verified 2026-11-27 | `count` |
+| `landingBlockChart` | `GET /landing/block/chart` | live-verified 2026-11-27 | — |
+| `concertsLandingPersonal` | `GET /concerts/landing/personal` | live-verified 2026-11-27 | — |
+| `tracksFileInfoBatch` | `GET /get-file-info/batch` | live-verified 2026-11-27 | signed, `trackIds` |
+| `tracksFileInfoV2` | `GET /resources/v2/file-info` | live-verified 2026-11-27 | signed |
+| `tracksFileInfoBatchV2` | `GET /resources/v2/file-info/batch` | live-verified 2026-11-27 | signed, `trackIds` |
 | `landingBlockEntities` | `GET /landing/block/{blockId}/entities` | TS-only (unverified) | `page` + `page-size` |
 | `landingBlocksEntitiesTag` | `GET /landing-blocks/entities/tag/{metaTagId}/block/{metaTagType}` | TS-only (unverified) | `page` + `page-size` |
 | `landingBlocksNonMusicContinueListen` | `GET /landing-blocks/non-music/continue-listen` | TS-only (unverified) | — |
@@ -323,7 +336,7 @@ await info?.download('track.flac');
 | `usersSearchHistory` | `GET /users/{uid}/search-history` | TS-only (unverified) | — |
 | `usersSearchHistoryClear` | `GET /users/{uid}/search-history/clear` | TS-only (unverified) | — |
 | `tracks` | через `getList` | reference-parity | — |
-| `tracksDownloadInfo` | `GET /tracks/{trackId}/download-info` | reference-parity | — |
+| `tracksDownloadInfo` | `GET /tracks/{trackId}/download-info` | reference-parity | `from=web-main&external-domain=music.yandex.ru&overloading=false` (default, `antiAdParams: false` disables) |
 | `tracksFileInfo` | `GET /get-file-info` (подписанный) | reference-parity | — |
 | `tracksLosslessInfo` | `GET /get-file-info` (подписанный, `encraw`) | reference-parity | — |
 | `tracksLyrics` | `GET /tracks/{trackId}/lyrics` | reference-parity | — |

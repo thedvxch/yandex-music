@@ -117,8 +117,9 @@ read-only запросы (`tracks`, `albums`, `search`, …) работают и
 - **Типизированные ошибки.** Любая ошибка наследует `YandexMusicError`; сетевые
   дополнительно наследуют `NetworkError` (`BadRequestError`, `NotFoundError`,
   `TimedOutError`, `UnauthorizedError`).
-- **Никогда не `JSON.stringify` модель** — она держит обратную ссылку на клиент
-  (циклическая структура). Читайте поля напрямую.
+- **Модели безопасно сериализовать и логировать.** Ссылка `client` у модели и
+  `client.token` неперечисляемые, `JSON.stringify(track)` отдаёт только данные, а
+  `console.log(client)` маскирует токен.
 
 ## Конфигурация
 
@@ -156,6 +157,10 @@ const client = new Client({
 | `retries` | ретраи транзиентных сбоев для GET (по умолчанию 2, 0 — выкл.) |
 | `retryBaseMs` / `retryMaxMs` | начальный и максимальный backoff ретраев, мс (по умолчанию 300 / 4000) |
 | `timeout` | таймаут запроса по умолчанию, мс (по умолчанию 5000; игнорируется, если передан `request`) |
+| `bodyTimeout` | бюджет на чтение тела ответа после заголовков, мс (по умолчанию 30000; итог — `max(timeout, bodyTimeout)`) |
+| `authOrigins` | дополнительные origin'ы, которым можно слать `Authorization` и `X-Yandex-Music-Client` (origin `baseUrl` и `https://api.music.yandex.net` разрешены всегда) |
+| `onUnauthorized` | `(error) => newToken`: вызывается на `401`, токен обновляется, запрос повторяется один раз (single flight) |
+| `clientHeader` | значение `X-Yandex-Music-Client` (по умолчанию `YandexMusicAndroid/26111171`) |
 | `reportUnknownFields` | подсветить поля API, которые модели ещё не маппят |
 | `onUnknownField` | хук вместо `console.warn` для того же дрейфа |
 | `request` | полностью преднастроенный транспорт (перекрывает `userAgent`/`headers`/`fetch`) |
@@ -202,8 +207,20 @@ backoff + jitter, `retries` попыток сверху, по умолчанию
 У `YandexMusicError` есть поля `status` (HTTP-код), `code` (машинный код из тела,
 например поле `error` OAuth) и `retryAfterMs`:
 
-- `429` → `TooManyRequestsError`, `5xx` (кроме `502`) → `ServerError`; оба
-  наследуют `NetworkError`. `502` остаётся `NetworkError('Bad Gateway')` с `status` 502.
+- Повторяются ровно ошибки с `error.retryable === true`: сбои транспорта,
+  таймауты и статусы `408`/`425`/`429`/`5xx`. Остальные `4xx` окончательны и
+  отправляются один раз.
+- `429` → `TooManyRequestsError`, `5xx` → `ServerError`, `502` → `BadGatewayError`
+  (подкласс `ServerError`, сообщение по-прежнему `Bad Gateway`); все наследуют `NetworkError`.
+- `401` → `UnauthorizedError`, `403` → `ForbiddenError` (подкласс `UnauthorizedError`,
+  поэтому старые проверки `instanceof UnauthorizedError` срабатывают). Обновляйте
+  токен только на `401`: `!(e instanceof ForbiddenError)`.
+- `404` → `NotFoundError`, `410` → `GoneError`, прочие `4xx` → `ClientError`
+  (все — подклассы `NetworkError`).
+- Ответ `2xx` с `error` и без `result`, битый JSON или XML → `InvalidResponseError`.
+- Ошибки диска и расшифровки — `YandexMusicError` с `retryable: false` (не
+  `NetworkError`); они не повторяются и останавливают перебор зеркал.
+- Отмена через `signal` → `AbortedError` (не повторяется, не `TimedOutError`).
 - На `429` и `503` учитывается заголовок `Retry-After`: пауза берётся из него, а
   если она больше `retryMaxMs`, ошибка бросается сразу, без ожидания.
 - Если тело ошибки — не JSON, сообщение имеет вид `HTTP <status>: <первые 200 символов>`.
@@ -231,6 +248,35 @@ try {
 передайте `fetch` с прокси; Android-опция `proxyUrl` объявлена устаревшей (она
 никогда не применялась).
 
+### Отмена, таймауты и обновление токена
+
+- `client.withOptions({ signal, timeout, deadline, retries })` возвращает вид клиента с
+  общими токеном, транспортом и состоянием аккаунта, где эти опции действуют на каждый запрос.
+  Модели, полученные через вид, наследуют их (например, `DownloadInfo.getDirectLink`).
+  `signal` прерывает и запрос, и паузу между повторами (`AbortedError`).
+- Те же опции принимает `client.request.send(method, url, { signal, timeout, retries })`;
+  загрузки — `info.download(path, { signal, timeout })`, `downloadBytes`, `fetchLyrics`;
+  `deviceAuth(onCode, { signal })`.
+- `timeout` ограничивает время до заголовков ответа, тело читается в пределах
+  `max(timeout, bodyTimeout)`. `retrieve()` по умолчанию использует JSON-таймаут.
+  Жёсткий предел на весь вызов (все попытки, чтение тела и паузы) задаёт
+  `deadline` (`TimedOutError` по истечении).
+- `Authorization` и `X-Yandex-Music-Client` уходят только на origin `baseUrl`,
+  `https://api.music.yandex.net` и `authOrigins`: CDN-зеркала, хранилище текстов и любые чужие URL их не получают.
+- Загрузка пишет во временный `*.part` рядом с целевым файлом и переименовывает
+  его при успехе: при ошибке существующий файл не трогается.
+- `DownloadInfo.directLink` живёт `DIRECT_LINK_TTL_MS` (50 с); `download()`
+  перезапрашивает устаревшую ссылку и повторяет попытку после `403`/`410`.
+
+```ts
+const client = new Client({
+  token,
+  onUnauthorized: async () => (await client.refreshAccessToken(storedRefreshToken)).accessToken,
+});
+const ctrl = new AbortController();
+const [track] = await client.withOptions({ signal: ctrl.signal, retries: 0 }).tracks(42);
+```
+
 ### Дрейф API: `reportUnknown`
 
 Хук `onUnknownField` получает отчёт `{ model, fields, raw, shapes }`. `fields` —
@@ -244,14 +290,14 @@ try {
 | Домен       | Методы |
 | ----------- | ------- |
 | account     | `init`, `accountStatus`, `accountSettings`, `accountSettingsSet`, `settings`, `permissionAlerts`, `accountExperiments`, `accountExperimentsDetails`, `consumePromoCode` |
-| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksFileInfo`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `playAudio`, `afterTrack` |
+| tracks      | `tracks`, `tracksDownloadInfo`, `tracksLosslessInfo`, `tracksFileInfo`, `tracksFileInfoBatch`, `tracksFileInfoV2`, `tracksFileInfoBatchV2`, `tracksLyrics`, `tracksSimilar`, `tracksFullInfo`, `tracksTrailer`, `trackSupplement`, `playAudio`, `afterTrack` |
 | albums      | `albums`, `albumsWithTracks`, `albumsSimilarEntities`, `albumsTrailer` |
 | artists     | `artists`, `artistsBriefInfo`, `artistsInfo`, `artistsAbout`, `artistsClips`, `artistsDonation`, `artistsSkeleton`, `artistsTracks`, `artistsTrackIds`, `artistsDirectAlbums`, `artistsAlsoAlbums`, `artistsDiscographyAlbums`, `artistsSafeDirectAlbums`, `artistsSimilar`, `artistsLinks`, `artistsTrailer` |
 | search      | `search`, `searchSuggest` |
 | likes       | `usersLikesTracks`/`Albums`/`Artists`/`Playlists`/`Clips` + add/remove для каждого, `usersLikesArtistsWithTimestamps`; `usersDislikesTracks`/`Artists` + add/remove |
 | playlists   | `playlist`, `playlists`, `playlistsList`, `playlistsPersonal`, `usersPlaylists`, `usersPlaylistsList`, `usersPlaylistsKinds`, `usersPlaylistsCreate`, `usersPlaylistsDelete`, `usersPlaylistsName`, `usersPlaylistsVisibility`, `usersPlaylistsDescription`, `usersPlaylistsChange`, `usersPlaylistsInsertTrack`, `usersPlaylistsDeleteTrack`, `usersPlaylistsRecommendations`, `usersPlaylistsTrailer`, `usersSettings`, `playlistSimilarEntities`, `playlistsCollectiveJoin` |
 | device auth | `requestDeviceCode`, `pollDeviceToken`, `deviceAuth` (блокирующий flow), `refreshAccessToken` (обновление по refresh-токену) |
-| landing     | `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
+| landing     | `landingSkeleton`, `landingBlockSource`, `landingBlockChart`, `landingBlocksWaves`/`Artists`/`InStyle`/`NewPlaylists`/`NewReleases`/`PersonalPlaylists`, `landing`, `feed`, `feedWizardIsPassed`, `tags`, `chart`, `newReleases`, `newPlaylists`, `podcasts`, `genres` |
 | radio       | `rotorStationsDashboard`, `rotorStationsList`, `rotorStationInfo`, `rotorStationTracks`, `rotorAccountStatus`, `rotorStationFeedback` (+ шорткаты `rotorStationFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip`), `rotorStationSettings2`, `rotorStationStream`, `rotorStationStreamFeedback`, `rotorWaveSettings`, `rotorWaveLast`, `rotorWaveLastReset`, `rotorSessionNew`, `rotorSessionClone`, `rotorSessionTracks`, `rotorSessionFeedback` (+ шорткаты `rotorSessionFeedbackRadioStarted`/`TrackStarted`/`TrackFinished`/`Skip`), `rotorSessionFeedbacks`, `rotorSessionsFeedbacks`, `rotorCombinedSessionNew`, `rotorCombinedSessionNext`, `rotorCombinedSessionLanding` |
 | queue       | `queuesList`, `queue`, `queueUpdatePosition`, `queueCreate` |
 | history     | `musicHistory`, `musicHistoryItems` |
@@ -262,7 +308,7 @@ try {
 | metatags    | `metatags`, `metatag`, `metatagAlbums`, `metatagArtists`, `metatagPlaylists` |
 | pins        | `pins`, `pin{Album,Artist,Playlist,Wave}`, `unpin{Album,Artist,Playlist,Wave}` |
 | presaves    | `usersPresaves`, `usersPresavesAdd`, `usersPresavesRemove` |
-| concerts    | `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
+| concerts    | `concertsLandingPersonal`, `artistsConcerts`, `concertInfo`, `concertSkeleton`, `concertsFeed`, `concertsLocations`, `concertsTabConfig` |
 | realtime    | `client.realtime()` → `RealtimeClient` (Ynison; нужен `ws`): события, `nowPlaying`, команды `pause`/`resume`/`nextTrack`/`previousTrack`/`setVolume` |
 
 ### Скачивание и качество
@@ -280,7 +326,7 @@ await best!.download('track.mp3');
 
 - `tracksFileInfo(trackId, { quality, codecs, transport, signKey, clientHeader })` /
   `track.getFileInfo(options)` возвращает `FileInfo`, у которого `downloadInfo` —
-  `LosslessDownloadInfo`. `quality`: `lossless` (по умолчанию), `hq` или `nq`;
+  `LosslessDownloadInfo`. `quality`: `lossless` (по умолчанию), `hq`, `nq`, `lq`, `preview` или `smart_preview`;
   транспорт по умолчанию — `raw` (обычный поток).
 - `tracksLosslessInfo(trackId, quality, options)` /
   `track.getLosslessInfo(quality)` возвращает сразу `LosslessDownloadInfo` и
@@ -336,6 +382,18 @@ if (np?.track) {
 рассылку по устройству, и новый id выкидывает вашего наблюдателя из fan-out,
 после чего состояние молча замирает. Геттеры `state` / `lastStateAgeMs` /
 `liveProgressMs()` дают остальную часть снимка для `/health`.
+
+### Токен и переподключения Ynison
+
+- `client.realtime()` читает `client.token` перед каждым переподключением, так что
+  смена токена доходит и до Ynison. `RealtimeOptions.token` может быть функцией.
+  При отказе в токене клиент один раз пробует новый токен (провайдер или
+  `onUnauthorized`), и только потом останавливается.
+- Коды `300100001`/`300100002` (сессию перенесли на другой хост) дают
+  `YnisonRebalancedError`: первое переподключение идёт сразу через redirector.
+- Android-идентичность: `ANDROID_DEVICE_INFO` с `appVersion` `2026.11.1`
+  (`YNISON_ANDROID_APP_VERSION`); другую версию задаёт
+  `androidDeviceInfo({ appVersion })`.
 
 ### Команды Ynison
 

@@ -31,8 +31,10 @@ group: Документация
   retry, timeout })` — общий низкоуровневый метод: `null` в `headers` убирает заголовок,
   `retry: true` включает ретраи для идемпотентного чтения через `POST`. `get`, `post`,
   `postJson`, `put`, `delete` — тонкие обёртки над ним.
-- **Никогда не `JSON.stringify` модель** — она держит обратную ссылку на клиент
-  (циклическая структура). Читайте поля напрямую.
+- **Модели безопасно сериализовать и логировать.** Ссылка `client` у модели и
+  `client.token` неперечисляемые, `JSON.stringify(track)` отдаёт только данные, а
+  `console.log(client)` маскирует токен. `Authorization` уходит только на origin
+  `baseUrl`, `https://api.music.yandex.net` и `authOrigins`.
 
 ## Конфигурация
 
