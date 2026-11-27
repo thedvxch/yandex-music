@@ -103,7 +103,7 @@ export interface ResponseLike {
 /** A JSON request body: {@link JSONValue} whose object properties may be `undefined` (dropped on serialization). */
 export type JsonInput = JSONValue | undefined | { [k: string]: JsonInput } | JsonInput[];
 
-/** Origin of the default API host; receives the `Authorization` header even without a client. */
+/** Origin of the default API host; always receives the `Authorization` header, whatever the `baseUrl`. */
 export const DEFAULT_API_ORIGIN = 'https://api.music.yandex.net';
 
 /**
@@ -118,8 +118,20 @@ export interface RequestOptions {
    * from {@link TimedOutError}.
    */
   signal?: AbortSignal;
-  /** Per-attempt timeout in milliseconds (JSON requests). */
+  /**
+   * Per-attempt timeout in milliseconds until the response headers arrive; the
+   * body is then read within `max(timeout, bodyTimeout)`. Use {@link deadline}
+   * for a hard cap on the whole call.
+   */
   timeout?: number;
+  /**
+   * Hard cap in milliseconds on the whole call: every attempt (headers and body
+   * read), the backoff sleeps and the 401 repeat. When it elapses the call
+   * rejects with {@link TimedOutError} (or with the last error when the next
+   * backoff would overrun it). Not applied by default. Streaming downloads
+   * ({@link Request.streamToFile}) keep their own `timeout` deadline.
+   */
+  deadline?: number;
   /** Retries for transient failures (`0` disables). Negative or non-finite values count as `0`. */
   retries?: number;
 }
@@ -195,9 +207,10 @@ export interface RequestInit {
   /**
    * Extra origins (for example `https://proxy.example`) that may receive the
    * `Authorization` and `X-Yandex-Music-Client` headers. The owning client's
-   * `baseUrl` origin (or {@link DEFAULT_API_ORIGIN} without a client) is always
-   * allowed; every other host (CDN mirrors, lyrics storage, arbitrary URLs)
-   * gets neither header.
+   * `baseUrl` origin and {@link DEFAULT_API_ORIGIN} (absolute API URLs such as
+   * the download-info XML, even behind a proxy `baseUrl`) are always allowed;
+   * every other host (CDN mirrors, lyrics storage, arbitrary URLs) gets neither
+   * header.
    */
   authOrigins?: string[];
 }
@@ -276,7 +289,13 @@ function originOf(url: string): string | null {
   }
 }
 
-/** Error codes of local (file-system) failures that no retry can fix. */
+/**
+ * Error codes of local (file-system) failures that no retry can fix. `EACCES` /
+ * `EPERM` stay final even when a custom fetch throws them for a socket (a
+ * policy or firewall block does not clear on retry). `EMFILE` / `ENFILE`
+ * (descriptor exhaustion) are deliberately absent: they are transient, so they
+ * surface as a retryable {@link NetworkError} whether a file or a socket hit them.
+ */
 const LOCAL_ERROR_CODES = new Set([
   'ENOSPC',
   'EDQUOT',
@@ -285,8 +304,6 @@ const LOCAL_ERROR_CODES = new Set([
   'EISDIR',
   'ENOTDIR',
   'EROFS',
-  'EMFILE',
-  'ENFILE',
   'EEXIST',
   'ENAMETOOLONG',
   'EBUSY',
@@ -457,7 +474,11 @@ export class Request {
     if (origin === null) {
       return false;
     }
-    return origin === originOf(this.client?.baseUrl ?? DEFAULT_API_ORIGIN) || this.authOrigins.includes(origin);
+    return (
+      origin === DEFAULT_API_ORIGIN ||
+      origin === originOf(this.client?.baseUrl ?? DEFAULT_API_ORIGIN) ||
+      this.authOrigins.includes(origin)
+    );
   }
 
   /** Redacted, cycle-free data view (the `Authorization` value is masked). */
@@ -480,15 +501,19 @@ export class Request {
 
   /**
    * Attach a client and, when it carries a token, the authorization header.
+   * A token-less client keeps an `Authorization` header the caller configured
+   * on a fresh transport; on a transport reused from another client the old
+   * client's header is cleared.
    *
    * @param client - The client to associate with this transport.
    * @returns The same client, for convenience.
    */
   setClient(client: Client): Client {
+    const reused = this.client !== undefined && this.client !== client;
     this.client = client;
     if (client.token) {
       this.setAuthorization(client.token);
-    } else {
+    } else if (reused) {
       this.clearAuthorization();
     }
     return client;
@@ -948,15 +973,22 @@ export class Request {
     const timeout = options.timeout ?? defaults.timeout;
     const retries = normalizeRetries(options.retries ?? defaults.retries ?? this.retries);
     const maxAttempts = method === 'GET' || options.retry === true ? retries + 1 : 1;
+    const deadline = options.deadline ?? defaults.deadline;
+    const end = deadline !== undefined && !Number.isNaN(deadline) ? Date.now() + Math.max(0, deadline) : undefined;
     let lastError: unknown;
-    let refreshed = false;
+    // A per-call Authorization (or its removal) is not the client token, so a
+    // refresh could not change what is sent; skip it instead of rotating the token.
+    let refreshed = Object.keys(options.headers ?? {}).some((name) => name.toLowerCase() === 'authorization');
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (signal?.aborted) {
         throw abortedError(signal);
       }
+      if (end !== undefined && Date.now() >= end) {
+        throw new TimedOutError();
+      }
       const sentToken = this.client?.token;
       try {
-        return await this.attemptRequest(method, url, body, timeout, options.headers, signal);
+        return await this.attemptRequest(method, url, body, timeout, options.headers, signal, end);
       } catch (error) {
         lastError = error;
         // A 401 from the API: let the client refresh the token once (single
@@ -985,7 +1017,11 @@ export class Request {
         if (serverDelay !== undefined && serverDelay > this.retryMaxMs) {
           throw error;
         }
-        await sleep(serverDelay ?? backoff(attempt, this.retryBaseMs, this.retryMaxMs), signal);
+        const delay = serverDelay ?? backoff(attempt, this.retryBaseMs, this.retryMaxMs);
+        if (end !== undefined && Date.now() + delay >= end) {
+          throw error;
+        }
+        await sleep(delay, signal);
       }
     }
     throw lastError;
@@ -998,10 +1034,13 @@ export class Request {
     timeout?: number,
     extraHeaders?: Record<string, string | null>,
     signal?: AbortSignal,
+    end?: number,
   ): Promise<Uint8Array> {
     const controller = new AbortController();
     const ms = timeout ?? this.timeout;
-    let timer = setTimeout(() => controller.abort(), ms);
+    // Every timer is clamped to the call's hard deadline, when one is set.
+    const capped = (budget: number): number => (end === undefined ? budget : Math.max(0, Math.min(budget, end - Date.now())));
+    let timer = setTimeout(() => controller.abort(), capped(ms));
     const unforward = forwardAbort(signal, controller);
 
     const headers = this.buildHeaders(url, extraHeaders);
@@ -1022,7 +1061,7 @@ export class Request {
       // large JSON on a slow link needs longer than the time-to-headers, yet a
       // stalled body stream (broken pipe with no RST) must not hang forever.
       clearTimeout(timer);
-      timer = setTimeout(() => controller.abort(), Math.max(ms, this.bodyTimeout));
+      timer = setTimeout(() => controller.abort(), capped(Math.max(ms, this.bodyTimeout)));
       const content = new Uint8Array(await response.arrayBuffer());
       if (response.status >= 200 && response.status <= 299) {
         return content;

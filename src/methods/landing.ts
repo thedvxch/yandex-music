@@ -327,10 +327,12 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
         throw new YandexMusicError('skeleton source has no uri');
       }
       let url: string;
+      let resolved: URL | undefined;
       if (uri.startsWith('/')) {
         url = `${this.baseUrl}${uri}`;
-      } else if (new URL(uri, this.baseUrl).origin === new URL(this.baseUrl).origin) {
-        url = uri;
+      } else if ((resolved = new URL(uri, this.baseUrl)).origin === new URL(this.baseUrl).origin) {
+        // A relative uri such as `landing/block/chart` is resolved against baseUrl.
+        url = resolved.href;
       } else {
         throw new YandexMusicError(`skeleton source points outside the API: ${uri}`);
       }

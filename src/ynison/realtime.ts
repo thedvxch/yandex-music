@@ -205,6 +205,8 @@ export class RealtimeClient extends EventEmitter {
   /** Loop generation: bumped by every start()/stop(), so a loop left suspended
    * by stop() exits instead of running alongside the next start()'s loop. */
   private generation = 0;
+  /** Generation of the latest start() (not bumped by stop()): only that loop emits `close`. */
+  private startedGeneration = 0;
 
   constructor(opts: RealtimeOptions) {
     super();
@@ -297,19 +299,19 @@ export class RealtimeClient extends EventEmitter {
     this.terminal = null;
     this.serverBackoffMs = null;
     const gen = ++this.generation;
+    this.startedGeneration = gen;
     const live = (): boolean => this.running && gen === this.generation;
     let tokenOverride: string | undefined;
     let unauthorizedRetried = false;
     /** Consecutive rebalance frames; only the first reconnects without delay. */
     let rebalances = 0;
     while (live()) {
-      const token = tokenOverride ?? (await resolveToken(this.opts.token));
-      if (!live()) {
-        break;
-      }
+      // Resolved inside client.connect() (within the try below), so a throwing
+      // provider is handled like a connect failure instead of rejecting start().
+      let token = '';
       const client = new YnisonClient({
         ...this.opts.ynison,
-        token,
+        token: async () => (token = tokenOverride ?? (await resolveToken(this.opts.token))),
         deviceId: this.deviceId,
         deviceInfo: this.opts.deviceInfo ?? null,
       });
@@ -327,6 +329,9 @@ export class RealtimeClient extends EventEmitter {
         if (!opened) {
           opened = true;
           openedAt = Date.now();
+          // The override served its one connect; a provider is asked again on
+          // the next reconnect (a constant token keeps the refreshed one).
+          if (typeof this.opts.token === 'function') tokenOverride = undefined;
           this.safeEmit('open');
         }
         // A throwing user listener must never become an unhandled rejection.
@@ -369,7 +374,9 @@ export class RealtimeClient extends EventEmitter {
           unauthorizedRetried = true;
           const fresh = await this.freshToken(token);
           if (fresh) {
-            tokenOverride = typeof this.opts.token === 'function' ? undefined : fresh;
+            // Always use the token that was just obtained: a provider may still
+            // return the rejected one when `fresh` came from onUnauthorized.
+            tokenOverride = fresh;
           } else {
             terminal = true;
             this.terminal = err;
@@ -433,7 +440,10 @@ export class RealtimeClient extends EventEmitter {
     if (gen === this.generation) {
       this.running = false;
     }
-    this.safeEmit('close', gen === this.generation ? this.terminal : null);
+    // A loop superseded by a newer start() stays silent; a plain stop() still closes.
+    if (gen === this.startedGeneration) {
+      this.safeEmit('close', gen === this.generation ? this.terminal : null);
+    }
   }
 
   /**

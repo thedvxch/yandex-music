@@ -74,13 +74,16 @@ export interface ClientOptions {
   timeout?: number;
   /**
    * Extra origins allowed to receive the `Authorization` and
-   * `X-Yandex-Music-Client` headers, besides the `baseUrl` origin. Every other
+   * `X-Yandex-Music-Client` headers, besides the `baseUrl` origin and
+   * `https://api.music.yandex.net` (always allowed, so absolute API URLs keep
+   * the token behind a proxy `baseUrl`). Every other
    * host (CDN mirrors, lyrics storage, any absolute URL) gets neither header.
    * Ignored when `request` is supplied (set `RequestInit.authOrigins` there).
    */
   authOrigins?: string[];
   /**
-   * Called when the API answers HTTP 401 (never on 403). The returned token is
+   * Called when the API answers HTTP 401 (never on 403, nor for a request that
+   * set its own per-call `Authorization` header). The returned token is
    * stored as `client.token` and the request is repeated once. Concurrent 401s
    * share one call (single flight), and a request that failed with a token that
    * was already rotated is simply repeated with the current one. The realtime
@@ -100,6 +103,22 @@ export type UnauthorizedHandler = (error: UnauthorizedError) => string | undefin
 /** The in-flight token refresh per client, shared by concurrent 401s (a WeakMap: private members break the mixin `.d.ts`). */
 const inFlightRefresh = new WeakMap<object, Promise<boolean>>();
 
+/**
+ * Plain fields a {@link ClientBase.withOptions} view forwards to its parent, so a
+ * write through the view (for example `init()` setting `me` / `accountUid`) lands
+ * on the shared state. `token` and `language` are closure accessors and are
+ * shared already.
+ */
+const VIEW_SHARED_FIELDS = [
+  'baseUrl',
+  'device',
+  'me',
+  'accountUid',
+  'onUnauthorized',
+  'reportUnknownFields',
+  'onUnknownField',
+] as const satisfies ReadonlyArray<keyof ClientBase>;
+
 /** Object types addressable through the batch "list" endpoints. */
 export type BatchObjectType = 'track' | 'album' | 'artist' | 'playlist';
 
@@ -116,8 +135,11 @@ export abstract class ClientBase {
   declare token: string | undefined;
   /** API origin used to build request URLs. */
   baseUrl: string;
-  /** Response language code. */
-  language: string;
+  /**
+   * Response language code. Setting it also updates the `Accept-Language`
+   * header (an accessor installed in the constructor, like {@link token}).
+   */
+  declare language: string;
   /** Device descriptor used for queue requests. */
   device: string = DEFAULT_DEVICE;
   /** Whether unknown-field warnings are enabled. */
@@ -154,7 +176,16 @@ export abstract class ClientBase {
       },
     });
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
-    this.language = options.language ?? 'ru';
+    let currentLanguage = options.language ?? 'ru';
+    Object.defineProperty(this, 'language', {
+      enumerable: true,
+      configurable: true,
+      get: (): string => currentLanguage,
+      set: (value: string): void => {
+        currentLanguage = value;
+        this.request.setLanguage(value);
+      },
+    });
     this.device = options.device ?? DEFAULT_DEVICE;
     this.reportUnknownFields = options.reportUnknownFields ?? false;
     this.onUnknownField = options.onUnknownField;
@@ -184,10 +215,13 @@ export abstract class ClientBase {
 
   /**
    * A view of this client whose requests default to `options` — a caller
-   * `signal`, a per-attempt `timeout` and a `retries` budget. The view shares
-   * the token, transport, account state and configuration with this client;
-   * models it returns keep using the view, so their convenience calls (for
-   * example `DownloadInfo.getDirectLink`) inherit the same options.
+   * `signal`, a per-attempt `timeout`, a hard `deadline` for the whole call
+   * (attempts, body reads and backoff) and a `retries` budget. The view shares
+   * the token, transport, account state (`me`, `accountUid`) and configuration
+   * (`baseUrl`, `device`, `language`, `onUnauthorized`, unknown-field reporting)
+   * with this client in both directions: writes through either side are seen by
+   * the other. Models it returns keep using the view, so their convenience calls
+   * (for example `DownloadInfo.getDirectLink`) inherit the same options.
    *
    * @example
    * ```ts
@@ -207,6 +241,16 @@ export abstract class ClientBase {
       configurable: true,
       writable: false,
     });
+    for (const key of VIEW_SHARED_FIELDS) {
+      Object.defineProperty(view, key, {
+        enumerable: true,
+        configurable: true,
+        get: (): unknown => this[key],
+        set: (value: unknown): void => {
+          (this as Record<string, unknown>)[key] = value;
+        },
+      });
+    }
     return view;
   }
 
@@ -249,7 +293,9 @@ export abstract class ClientBase {
     if (!pending) {
       pending = (async (): Promise<boolean> => {
         try {
-          const next = await hook(error);
+          // Defer the hook past the first await: a hook that throws synchronously
+          // must not settle `pending` before it is stored (and then never deleted).
+          const next = await Promise.resolve().then(() => hook(error));
           if (next && next !== failedToken) {
             this.token = next;
             return true;

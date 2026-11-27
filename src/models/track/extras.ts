@@ -6,7 +6,7 @@
 import { createHash, createDecipheriv, type Decipher } from 'node:crypto';
 import type { Transform } from 'node:stream';
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { ForbiddenError, GoneError, InvalidResponseError, YandexMusicError } from '../../exceptions.js';
+import { ForbiddenError, GoneError, InvalidResponseError, TimedOutError, YandexMusicError } from '../../exceptions.js';
 import { DEFAULT_DOWNLOAD_TIMEOUT_MS } from '../../request.js';
 import { LyricsMajor, R128 } from './nested.js';
 import { Track } from './track.js';
@@ -86,9 +86,8 @@ export class DownloadInfo extends YandexMusicModel {
   ): Promise<DownloadInfo[]> {
     const infos = deList(DownloadInfo.deJson, raw, client);
     if (getDirectLinks) {
-      for (const info of infos) {
-        await info.getDirectLink();
-      }
+      // In parallel: each link expires about a minute after it is resolved.
+      await Promise.all(infos.map((info) => info.getDirectLink()));
     }
     return infos;
   }
@@ -312,7 +311,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
    * `/get-file-info` returns several mirror URLs on different CDN hosts; this
    * tries each in order so a single flaky host doesn't fail the download.
    *
-   * @param options - Optional `signal` / `timeout`.
+   * @param options - Optional `signal` / `timeout` (ms; one deadline for all mirrors and retries).
    * @returns The decoded audio file contents.
    * @throws {YandexMusicError} On any transport or API error (the last one, after
    *   every candidate URL fails).
@@ -323,11 +322,18 @@ export class LosslessDownloadInfo extends YandexMusicModel {
       throw new InvalidResponseError('LosslessDownloadInfo has no stream URL.');
     }
     const request = this.requireClient().request;
+    // One deadline shared by every mirror (and retry): `timeout` caps the whole download.
+    const deadline = Date.now() + (options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS);
     let bytes: Uint8Array | undefined;
     let lastError: unknown;
     for (const link of links) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        lastError ??= new TimedOutError();
+        break;
+      }
       try {
-        bytes = await request.retrieve(link, options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS, { signal: options.signal });
+        bytes = await request.retrieve(link, remaining, { signal: options.signal, deadline: remaining });
         break;
       } catch (error) {
         lastError = error;
@@ -361,7 +367,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
    * @param options - Set `race: true` to race all mirror URLs and commit to the
    *   fastest responder (cuts tail latency when a host is slow; falls back to
    *   sequential on failure). Defaults to sequential mirror failover. `signal`
-   *   cancels the download, `timeout` caps it (ms).
+   *   cancels the download, `timeout` caps the whole download across all mirrors (ms).
    * @throws {YandexMusicError} On any transport or API error (the last one, after
    *   every candidate URL fails).
    */
@@ -377,10 +383,17 @@ export class LosslessDownloadInfo extends YandexMusicModel {
     if (options.race) {
       return request.raceToFile(links, filename, stream);
     }
+    // One deadline shared by every mirror: `timeout` caps the whole download.
+    const deadline = Date.now() + (options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS);
     let lastError: unknown;
     for (const link of links) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        lastError ??= new TimedOutError();
+        break;
+      }
       try {
-        await request.streamToFile(link, filename, stream);
+        await request.streamToFile(link, filename, { ...stream, timeout: remaining });
         return;
       } catch (error) {
         lastError = error;

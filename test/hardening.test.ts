@@ -66,7 +66,7 @@ describe('H2: auth headers only go to allowed origins', () => {
     expect(calls[1]!.headers['User-Agent']).toBeDefined();
   });
 
-  test('a custom baseUrl and explicit authOrigins are allowed; the default API host is not implied', async () => {
+  test('a custom baseUrl, explicit authOrigins and the default API host are allowed; others are not', async () => {
     const { client, calls } = clientWith([{ match: '/', body: { result: 1 } }], {
       baseUrl: 'https://proxy.test/api',
       authOrigins: ['https://extra.test'],
@@ -74,7 +74,8 @@ describe('H2: auth headers only go to allowed origins', () => {
     await client.request.get('https://proxy.test/api/x');
     await client.request.get('https://extra.test/x');
     await client.request.get('https://api.music.yandex.net/x');
-    expect(calls.map((c) => c.headers['Authorization'])).toEqual(['OAuth tok', 'OAuth tok', undefined]);
+    await client.request.get('https://other.test/x');
+    expect(calls.map((c) => c.headers['Authorization'])).toEqual(['OAuth tok', 'OAuth tok', 'OAuth tok', undefined]);
   });
 
   test('downloads (streamToFile) do not send the token to CDN mirrors', async () => {

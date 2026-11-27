@@ -161,10 +161,15 @@ export type YnisonCommandRequest = Record<string, unknown> & {
   activityInterceptionType: 'DO_NOT_INTERCEPT_BY_DEFAULT';
 };
 
+/** A random non-negative int64 below 10^18 as a decimal string, from 8 random bytes (every digit random, unlike `Math.random() * 1e18`). */
+function randomVersion(): string {
+  return (BigInt(`0x${randomBytes(8).toString('hex')}`) % 10n ** 18n).toString();
+}
+
 function newVersion(deviceId: string, opts: CommandBuildOptions): { deviceId: string; version: string; timestampMs: string } {
   return {
     deviceId,
-    version: opts.version ?? String(Math.floor(Math.random() * 1e18)),
+    version: opts.version ?? randomVersion(),
     timestampMs: String(opts.nowMs ?? Date.now()),
   };
 }

@@ -117,6 +117,8 @@ export class FakeYnisonServer {
   readonly received: Array<Record<string, unknown>> = [];
   /** Raw `Sec-WebSocket-Protocol` header of every connection, tagged with its path. */
   readonly subprotocols: Array<{ path: string; header: string }> = [];
+  /** `Authorization` header of every connection, tagged with its path. */
+  readonly authorizations: Array<{ path: string; header: string }> = [];
   readonly port: number;
 
   private readonly wss: WebSocketServer;
@@ -129,6 +131,7 @@ export class FakeYnisonServer {
     wss.on('connection', (ws, req) => {
       const path = (req.url ?? '').split('?')[0] ?? '';
       this.subprotocols.push({ path, header: String(req.headers['sec-websocket-protocol'] ?? '') });
+      this.authorizations.push({ path, header: String(req.headers['authorization'] ?? '') });
       this.handle(ws, path);
     });
   }
