@@ -5,7 +5,7 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-- Новый логотип: три книги («библиотека») — верхняя ровно, средняя в перспективе и сильно наклонена, нижняя чуть кривая — вместо прежнего знака dvxch. Обновлены `assets/hero.svg`/`hero.png`, `favicon.svg`, `mark.svg`; добавлены одноцветные `mark-mono-dark.svg` и `mark-mono-light.svg`. Знак нарисован с нуля.
+- Новый логотип: три книги («библиотека») — верхняя ровно, средняя повёрнута в пространстве (грань сужается клином), нижняя чуть кривая — вместо прежнего знака dvxch. Обновлены `assets/hero.svg`/`hero.png`, `favicon.svg`, `mark.svg`; добавлены одноцветные `mark-mono-dark.svg` и `mark-mono-light.svg`. Знак нарисован с нуля.
 
 ## 0.4.1 - 2026-11-27
 
