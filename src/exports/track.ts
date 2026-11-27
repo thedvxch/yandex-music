@@ -13,6 +13,7 @@ export {
 } from '../models/track/nested.js';
 export { DownloadInfo, LosslessDownloadInfo, FileDownloadInfo, FileInfo, decryptEncraw, encrawDecipher, TrackLyrics, SimilarTracks, TrackFullInfo, TrackTrailer } from '../models/track/extras.js';
 export type { DownloadOptions } from '../models/track/extras.js';
+export { DIRECT_LINK_TTL_MS } from '../models/track/extras.js';
 export { Supplement, Lyrics, VideoSupplement } from '../models/supplement.js';
 export { Shot, ShotData, ShotType, ShotEvent } from '../models/shot.js';
 export { TrailerInfo } from '../models/trailerInfo.js';

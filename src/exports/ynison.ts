@@ -9,6 +9,8 @@ export {
   deviceIdFromToken,
   buildUpdateFullStateRequest,
   ANDROID_DEVICE_INFO,
+  YNISON_ANDROID_APP_VERSION,
+  androidDeviceInfo,
 } from '../ynison/messages.js';
 export type { DeviceInfoOverride, UpdateFullStateRequest } from '../ynison/messages.js';
 export type { YnisonDevice } from '../ynison/client.js';

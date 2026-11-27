@@ -8,7 +8,7 @@ import type { Transform } from 'node:stream';
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
 import { ForbiddenError, GoneError, InvalidResponseError, YandexMusicError } from '../../exceptions.js';
 import { DEFAULT_DOWNLOAD_TIMEOUT_MS } from '../../request.js';
-import { LyricsMajor } from './nested.js';
+import { LyricsMajor, R128 } from './nested.js';
 import { Track } from './track.js';
 import { Artist } from '../artist/artist.js';
 import type { Client } from '../../client.js';
@@ -248,6 +248,8 @@ export class LosslessDownloadInfo extends YandexMusicModel {
   gain?: boolean;
   /** Canonical track id when the requested id is an alias. */
   realId?: string;
+  /** Loudness (EBU R128 integrated loudness `i` and true peak `tp`), sent by `/resources/v2/file-info`. */
+  r128?: R128;
 
   /** @see {@link LosslessDownloadInfo} */
   static deJson(raw: JSONValue | undefined, client?: Client): LosslessDownloadInfo | null {
@@ -268,6 +270,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
       'gain',
       'realId',
     ]);
+    model.r128 = R128.deJson(raw['r128'], client) ?? undefined;
     reportUnknown(client, 'LosslessDownloadInfo', raw, model);
     return model;
   }

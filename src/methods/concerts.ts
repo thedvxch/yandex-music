@@ -14,6 +14,7 @@ import {
   ConcertSkeleton,
   ConcertTabConfig,
 } from '../models/concert/concert.js';
+import { PersonalConcerts } from '../models/landing/blocks.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -113,6 +114,17 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
         { params },
       );
       return ArtistsWithConcerts.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch concerts recommended for the user (`concerts/landing/personal`).
+     *
+     * @remarks Requires authorization.
+     * @returns The concerts, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async concertsLandingPersonal(): Promise<PersonalConcerts | null> {
+      return this.getModel(`${this.baseUrl}/concerts/landing/personal`, PersonalConcerts.deJson);
     }
   }
 

@@ -38,6 +38,14 @@ export interface ClientOptions {
   userAgent?: string;
   /** Extra headers merged onto the defaults. Ignored when `request` is supplied. */
   headers?: Record<string, string>;
+  /**
+   * `X-Yandex-Music-Client` value (defaults to `DEFAULT_CLIENT_HEADER`, the
+   * current Android build). Takes precedence over `headers`. Ignored when
+   * `request` is supplied.
+   */
+  clientHeader?: string;
+  /** Budget in ms for reading a response body after the headers arrived. Defaults to `30000`. Ignored when `request` is supplied. */
+  bodyTimeout?: number;
   /** Device descriptor for queue requests. Defaults to {@link DEFAULT_DEVICE}. */
   device?: string;
   /** Response language. Defaults to `ru`. One of `en`/`uz`/`uk`/`us`/`ru`/`kk`/`hy`. */
@@ -160,7 +168,10 @@ export abstract class ClientBase {
         client: this as unknown as Client,
         fetch: options.fetch,
         userAgent: options.userAgent,
-        headers: options.headers,
+        headers: options.clientHeader
+          ? { ...options.headers, 'X-Yandex-Music-Client': options.clientHeader }
+          : options.headers,
+        bodyTimeout: options.bodyTimeout,
         retries: options.retries,
         retryBaseMs: options.retryBaseMs,
         retryMaxMs: options.retryMaxMs,

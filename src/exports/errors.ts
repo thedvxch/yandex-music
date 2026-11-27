@@ -24,6 +24,7 @@ export {
   YnisonServerError,
   YnisonUnauthorizedError,
   YnisonDeviceDisplacedError,
+  YnisonRebalancedError,
   YnisonTimeoutError,
   YnisonConnectionClosedError,
 } from '../exceptions.js';

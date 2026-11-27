@@ -207,3 +207,10 @@ export class YnisonUnauthorizedError extends YnisonServerError {}
 
 /** Raised when another client with the same device id displaced this one (code `400090001`). Terminal for the realtime client. */
 export class YnisonDeviceDisplacedError extends YnisonServerError {}
+
+/**
+ * Raised when Ynison moves the session to another host (codes `300100001` /
+ * `300100002`). Not a failure: the realtime client reconnects through the
+ * redirector at once, without waiting for the backoff.
+ */
+export class YnisonRebalancedError extends YnisonServerError {}

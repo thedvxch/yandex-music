@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { ClientBase } from '../clientBase.js';
 import { pathSegment } from '../utils/path.js';
-import { isJsonObject } from '../base.js';
+import { deList, isJsonObject } from '../base.js';
 import { Track } from '../models/track/track.js';
 import { AlbumSimilarEntities } from '../models/album/albumExtras.js';
 import {
@@ -31,6 +31,7 @@ import {
 } from '../signRequest.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
+import type { JSONValue } from '../types.js';
 
 /** Parameters for reporting playback progress via `playAudio`. */
 export interface PlayAudioOptions {
@@ -60,10 +61,17 @@ export interface PlayAudioOptions {
   clientNow?: string;
 }
 
+/**
+ * File-info quality: `lossless`, `hq` (high), `nq` (normal), `lq` (low),
+ * `preview` (a short clip) or `smart_preview` (the highlight clip used for
+ * previews; listed in a track's `specialAudioResources` when available).
+ */
+export type FileInfoQuality = 'lossless' | 'hq' | 'nq' | 'lq' | 'preview' | 'smart_preview';
+
 /** Options for `/get-file-info` requests. */
 export interface FileInfoOptions {
-  /** Requested quality: `lossless`, `hq`, `nq`. Defaults to `lossless`. */
-  quality?: 'lossless' | 'hq' | 'nq' | (string & {});
+  /** Requested quality (see {@link FileInfoQuality}). Defaults to `lossless`. */
+  quality?: FileInfoQuality | (string & {});
   /** Allowed codecs. Defaults to every known codec. */
   codecs?: readonly string[];
   /** Transport: `raw` or `encraw`. */
@@ -74,22 +82,46 @@ export interface FileInfoOptions {
   clientHeader?: string;
 }
 
-/** Signed `GET /get-file-info`; returns the unwrapped result. */
+/** Query parameters that make `/tracks/{id}/download-info` answer like the web player (no ad preroll in place of the track). */
+export const DOWNLOAD_INFO_ANTI_AD_PARAMS: Readonly<Record<string, string>> = {
+  from: 'web-main',
+  'external-domain': 'music.yandex.ru',
+  overloading: 'false',
+};
+
+/** Options for {@link Client.tracksDownloadInfo}. */
+export interface DownloadInfoOptions {
+  /**
+   * Send {@link DOWNLOAD_INFO_ANTI_AD_PARAMS} (default `true`). Without them the
+   * endpoint has been seen to return an advertisement instead of the track for
+   * some accounts (MarshalX/yandex-music-api#675).
+   */
+  antiAdParams?: boolean;
+}
+
+/**
+ * Signed file-info `GET` (`/get-file-info`, `/get-file-info/batch` and the
+ * `/resources/v2/file-info` variants); returns the unwrapped result. Batch
+ * endpoints take `trackIds` and sign over the comma-joined id list.
+ */
 function requestFileInfo(
   client: ClientBase,
-  trackId: string | number,
+  path: string,
+  ids: string | number | Array<string | number>,
   options: FileInfoOptions,
   defaultTransport: string,
 ) {
   const quality = options.quality ?? 'lossless';
   const codecs = options.codecs ?? FILE_INFO_CODECS_LIST;
   const transport = options.transport ?? defaultTransport;
-  const sign = getFileInfoSign(trackId, quality, codecs, transport, options.signKey ?? DESKTOP_SIGN_KEY);
+  const batch = Array.isArray(ids);
+  const idValue = batch ? ids.join(',') : ids;
+  const sign = getFileInfoSign(idValue, quality, codecs, transport, options.signKey ?? DESKTOP_SIGN_KEY);
   return client.request.get(
-    `${client.baseUrl}/get-file-info`,
+    `${client.baseUrl}${path}`,
     {
       ts: sign.ts,
-      trackId,
+      [batch ? 'trackIds' : 'trackId']: idValue,
       quality,
       codecs: codecs.join(','),
       transports: transport,
@@ -98,6 +130,14 @@ function requestFileInfo(
     undefined,
     { 'X-Yandex-Music-Client': options.clientHeader ?? DESKTOP_CLIENT },
   );
+}
+
+/** The file-info list of a batch response (`downloadInfos` on v1, `fileInfos` on v2; either is accepted). */
+function fileInfoList(result: JSONValue | undefined, client: Client): LosslessDownloadInfo[] {
+  if (!isJsonObject(result)) {
+    return [];
+  }
+  return deList(LosslessDownloadInfo.deJson, result['downloadInfos'] ?? result['fileInfos'], client);
 }
 
 /**
@@ -129,12 +169,17 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      *
      * @param trackId - The track id.
      * @param getDirectLinks - Resolve direct file links eagerly. Defaults to `false`.
+     * @param options - `antiAdParams` (default `true`, see {@link DOWNLOAD_INFO_ANTI_AD_PARAMS}).
      * @returns The list of download variants.
      * @throws {YandexMusicError} On any transport or API error.
      */
-    async tracksDownloadInfo(trackId: string | number, getDirectLinks = false): Promise<DownloadInfo[]> {
+    async tracksDownloadInfo(
+      trackId: string | number,
+      getDirectLinks = false,
+      options: DownloadInfoOptions = {},
+    ): Promise<DownloadInfo[]> {
       const url = `${this.baseUrl}/tracks/${pathSegment(trackId)}/download-info`;
-      const result = await this.request.get(url);
+      const result = await this.request.get(url, options.antiAdParams === false ? undefined : { ...DOWNLOAD_INFO_ANTI_AD_PARAMS });
       return DownloadInfo.deListAsync(result, this as unknown as Client, getDirectLinks);
     }
 
@@ -154,8 +199,66 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksFileInfo(trackId: string | number, options: FileInfoOptions = {}): Promise<FileInfo | null> {
-      const result = await requestFileInfo(this, trackId, options, 'raw');
+      const result = await requestFileInfo(this, '/get-file-info', trackId, options, 'raw');
       return FileInfo.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch file info for several tracks in one signed request
+     * (`GET /get-file-info/batch`, used by the web player).
+     *
+     * @remarks
+     * Same options and signing as {@link tracksFileInfo}; the signature covers the
+     * comma-joined id list. Defaults to the `raw` transport. Tracks the server
+     * cannot serve are simply missing from the result — match by
+     * {@link LosslessDownloadInfo.trackId}.
+     *
+     * @param trackIds - Track ids, sent exactly as given.
+     * @param options - Quality, codecs, transport and signing overrides.
+     * @returns One {@link LosslessDownloadInfo} per served track.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async tracksFileInfoBatch(
+      trackIds: Array<string | number>,
+      options: FileInfoOptions = {},
+    ): Promise<LosslessDownloadInfo[]> {
+      const result = await requestFileInfo(this, '/get-file-info/batch', trackIds, options, 'raw');
+      return fileInfoList(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch file info via the newer `GET /resources/v2/file-info`.
+     *
+     * @remarks
+     * Same query and signature as {@link tracksFileInfo}, but the answer is the
+     * bare file info (no envelope) and carries loudness data
+     * ({@link LosslessDownloadInfo.r128}). Defaults to the `raw` transport.
+     *
+     * @param trackId - The track id, sent exactly as given.
+     * @param options - Quality, codecs, transport and signing overrides.
+     * @returns The file info, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async tracksFileInfoV2(trackId: string | number, options: FileInfoOptions = {}): Promise<LosslessDownloadInfo | null> {
+      const result = await requestFileInfo(this, '/resources/v2/file-info', trackId, options, 'raw');
+      const info = isJsonObject(result) ? (result['fileInfo'] ?? result['downloadInfo'] ?? result) : undefined;
+      return LosslessDownloadInfo.deJson(info, this as unknown as Client);
+    }
+
+    /**
+     * Batch form of {@link tracksFileInfoV2} (`GET /resources/v2/file-info/batch`).
+     *
+     * @param trackIds - Track ids, sent exactly as given.
+     * @param options - Quality, codecs, transport and signing overrides.
+     * @returns One {@link LosslessDownloadInfo} per served track.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async tracksFileInfoBatchV2(
+      trackIds: Array<string | number>,
+      options: FileInfoOptions = {},
+    ): Promise<LosslessDownloadInfo[]> {
+      const result = await requestFileInfo(this, '/resources/v2/file-info/batch', trackIds, options, 'raw');
+      return fileInfoList(result, this as unknown as Client);
     }
 
     /**
@@ -181,7 +284,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
       quality = 'lossless',
       options: Omit<FileInfoOptions, 'quality'> = {},
     ): Promise<LosslessDownloadInfo | null> {
-      const result = await requestFileInfo(this, trackId, { ...options, quality }, FILE_INFO_TRANSPORT);
+      const result = await requestFileInfo(this, '/get-file-info', trackId, { ...options, quality }, FILE_INFO_TRANSPORT);
       const info = isJsonObject(result) ? result['downloadInfo'] : undefined;
       return LosslessDownloadInfo.deJson(info, this as unknown as Client);
     }

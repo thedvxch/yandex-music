@@ -121,14 +121,28 @@ export function buildUpdateFullStateRequest(
   };
 }
 
+/** Android app version reported by {@link ANDROID_DEVICE_INFO} (Google Play release of 2026-11). */
+export const YNISON_ANDROID_APP_VERSION = '2026.11.1';
+
 /** An Android client identity that makes the server expose richer state. */
 export const ANDROID_DEVICE_INFO: DeviceInfoOverride = {
   type: 'ANDROID',
   headerType: '2',
   appName: 'ru.yandex.music',
-  appVersion: '2026.05.3',
+  appVersion: YNISON_ANDROID_APP_VERSION,
   title: 'yandex-music',
 };
+
+/**
+ * The Android identity with overrides, for example a different `appVersion`
+ * once the default ages: `androidDeviceInfo({ appVersion: '2027.01.1' })`.
+ *
+ * @param overrides - Fields replacing those of {@link ANDROID_DEVICE_INFO}.
+ * @returns A new identity object.
+ */
+export function androidDeviceInfo(overrides: Partial<DeviceInfoOverride> = {}): DeviceInfoOverride {
+  return { ...ANDROID_DEVICE_INFO, ...overrides };
+}
 
 /** Optional overrides that make command builders deterministic (tests). */
 export interface CommandBuildOptions {

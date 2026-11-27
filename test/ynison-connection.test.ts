@@ -6,6 +6,7 @@ import {
   YnisonConnectionClosedError,
   YnisonDeviceDisplacedError,
   YnisonError,
+  YnisonRebalancedError,
   YnisonServerError,
   YnisonTimeoutError,
   YnisonUnauthorizedError,
@@ -393,6 +394,37 @@ describe('state dispatch, force close and token rotation (M4, M10, M11, M12)', (
     expect(refreshes).toBe(1);
     expect(server.stateCount).toBe(2);
     expect(rt.terminalError).toBeInstanceOf(YnisonUnauthorizedError);
+  });
+});
+
+describe('rebalance (300100001 / 300100002)', () => {
+  const rebalanceFrame = (code: string): string =>
+    JSON.stringify({
+      error: {
+        details: { 'ynison-error-code': code, 'ynison-backoff-millis': '5000', 'ynison-go-away-for-seconds': '60' },
+        grpc_code: 14,
+        http_code: 503,
+        message: 'session moved',
+      },
+    });
+
+  test('the first rebalance reconnects at once; a repeated one falls back to the backoff', async () => {
+    server.stateScripts.push(sendFramesThenClose(rebalanceFrame('300100001')));
+    server.stateScripts.push(sendFramesThenClose(rebalanceFrame('300100002')));
+    server.stateScripts.push(sendFramesThenWait(stateFrame()));
+    const rt = realtime({ reconnectMaxMs: 300, goAwayMaxMs: 300 });
+    const waits: number[] = [];
+    rt.on('reconnect', (ms) => waits.push(ms));
+    const errors: Error[] = [];
+    rt.on('error', (e) => errors.push(e));
+    const done = rt.start();
+    await waitEvent(rt, 'open');
+    expect(errors[0]).toBeInstanceOf(YnisonRebalancedError);
+    expect(waits[0]).toBe(0);
+    expect(waits[1]).toBeGreaterThan(0);
+    expect(server.redirectCount).toBe(3);
+    rt.stop();
+    await done;
   });
 });
 

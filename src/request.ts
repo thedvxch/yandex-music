@@ -66,9 +66,15 @@ export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 300_000;
  */
 export const DEFAULT_DOWNLOAD_IDLE_MS = 60_000;
 
+/**
+ * Default `X-Yandex-Music-Client` value: the Android app build 2026.11.1 (#171).
+ * Override with `ClientOptions.clientHeader` (or `headers`).
+ */
+export const DEFAULT_CLIENT_HEADER = 'YandexMusicAndroid/26111171';
+
 /** Headers sent with every request unless overridden. */
 export const BASE_HEADERS: Readonly<Record<string, string>> = {
-  'X-Yandex-Music-Client': 'YandexMusicAndroid/24023621',
+  'X-Yandex-Music-Client': DEFAULT_CLIENT_HEADER,
 };
 
 /** A primitive that can be serialized into a query string or form body. */

@@ -15,6 +15,7 @@ import {
   YnisonConnectionClosedError,
   YnisonDeviceDisplacedError,
   YnisonError,
+  YnisonRebalancedError,
   YnisonServerError,
   YnisonTimeoutError,
   YnisonUnauthorizedError,
@@ -36,6 +37,8 @@ const DEFAULT_KEEPALIVE_SECONDS = 20;
 const GRPC_UNAUTHENTICATED = 16;
 const GRPC_PERMISSION_DENIED = 7;
 const ERROR_CODE_DEVICE_DISPLACED = '400090001';
+/** Session moved to another host: reconnect through the redirector right away. */
+const ERROR_CODES_REBALANCED = new Set(['300100001', '300100002']);
 
 function defaultStateUrl(host: string): string {
   return `wss://${host}/ynison_state.YnisonStateService/PutYnisonState`;
@@ -222,7 +225,8 @@ function parseIntOrUndefined(v: unknown): number | undefined {
  * @remarks
  * Reads `details` (or `extra_headers` when `details` is empty). gRPC 16/7 or HTTP
  * 401/403 gives {@link YnisonUnauthorizedError}; code `400090001` gives
- * {@link YnisonDeviceDisplacedError}; anything else {@link YnisonServerError}.
+ * {@link YnisonDeviceDisplacedError}; codes `300100001` / `300100002` give
+ * {@link YnisonRebalancedError}; anything else {@link YnisonServerError}.
  * `ynison-backoff-millis` (`a:b:c`) becomes `backoffMs`; `ynison-go-away-for-seconds`
  * becomes `goAwaySeconds` and `retryAfterMs`.
  *
@@ -265,6 +269,9 @@ export function parseServerError(payload: Record<string, unknown>): YnisonServer
   }
   if (errorCode === ERROR_CODE_DEVICE_DISPLACED) {
     return new YnisonDeviceDisplacedError(text, opts);
+  }
+  if (errorCode !== undefined && ERROR_CODES_REBALANCED.has(errorCode)) {
+    return new YnisonRebalancedError(text, opts);
   }
   return new YnisonServerError(text, opts);
 }

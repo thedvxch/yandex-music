@@ -15,6 +15,7 @@ import {
   YnisonConnectionClosedError,
   YnisonDeviceDisplacedError,
   YnisonError,
+  YnisonRebalancedError,
   YnisonServerError,
   YnisonUnauthorizedError,
 } from '../exceptions.js';
@@ -299,6 +300,8 @@ export class RealtimeClient extends EventEmitter {
     const live = (): boolean => this.running && gen === this.generation;
     let tokenOverride: string | undefined;
     let unauthorizedRetried = false;
+    /** Consecutive rebalance frames; only the first reconnects without delay. */
+    let rebalances = 0;
     while (live()) {
       const token = tokenOverride ?? (await resolveToken(this.opts.token));
       if (!live()) {
@@ -346,6 +349,7 @@ export class RealtimeClient extends EventEmitter {
           this.attempt = 0;
           this.serverBackoffMs = null;
           unauthorizedRetried = false;
+          rebalances = 0;
         } else {
           shortSession = true;
         }
@@ -381,10 +385,19 @@ export class RealtimeClient extends EventEmitter {
         // can carry an hour-long go-away, which would freeze the client until it
         // elapses. Capping lets us recover within `goAwayMaxMs` of the service
         // returning.
-        delayMs =
-          error instanceof YnisonError && error.retryAfterMs
-            ? Math.min(error.retryAfterMs, this.opts.goAwayMaxMs ?? 60_000)
-            : this.backoff();
+        const immediate = err instanceof YnisonRebalancedError && rebalances === 0;
+        rebalances = err instanceof YnisonRebalancedError ? rebalances + 1 : 0;
+        if (immediate) {
+          // The session moved to another host: go straight back through the
+          // redirector. A repeated rebalance falls back to the normal backoff.
+          delayMs = 0;
+          shortSession = false;
+        } else {
+          delayMs =
+            error instanceof YnisonError && error.retryAfterMs
+              ? Math.min(error.retryAfterMs, this.opts.goAwayMaxMs ?? 60_000)
+              : this.backoff();
+        }
       } finally {
         if (staleTimer !== null) {
           clearInterval(staleTimer);

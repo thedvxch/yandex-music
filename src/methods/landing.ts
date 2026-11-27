@@ -23,6 +23,17 @@ import { Genre } from '../models/genre.js';
 import { Feed } from '../models/feed/feed.js';
 import { TagResult } from '../models/tagResult.js';
 import { isJsonObject } from '../base.js';
+import {
+  LandingBlockItems,
+  LandingInStyle,
+  LandingNewReleases,
+  LandingSkeleton,
+  LandingWaves,
+} from '../models/landing/blocks.js';
+import type { SkeletonSource } from '../models/skeleton.js';
+import { YandexMusicError } from '../exceptions.js';
+import type { Params } from '../request.js';
+import type { JSONValue } from '../types.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
 
@@ -208,6 +219,133 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
     async landingRecentlyPlayed(): Promise<RecentlyPlayed | null> {
       const result = await this.request.get(`${this.baseUrl}/landing-blocks/recently-played`);
       return RecentlyPlayed.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the startable waves of the home screen (`landing-blocks/waves`),
+     * grouped by kind (top mix, activity, artist, genre, language, …).
+     *
+     * @remarks Requires authorization.
+     * @returns The wave groups, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingBlocksWaves(): Promise<LandingWaves | null> {
+      return this.getModel(`${this.baseUrl}/landing-blocks/waves`, LandingWaves.deJson);
+    }
+
+    /**
+     * Fetch the "artists for you" block (`landing-blocks/artists`).
+     *
+     * @remarks Requires authorization.
+     * @returns The items (`artist_item`), or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingBlocksArtists(): Promise<LandingBlockItems | null> {
+      return this.getModel(`${this.baseUrl}/landing-blocks/artists`, LandingBlockItems.deJson);
+    }
+
+    /**
+     * Fetch the "in the style of" block (`landing-blocks/in-style`): album tabs per artist.
+     *
+     * @remarks Requires authorization.
+     * @returns The tabs, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingBlocksInStyle(): Promise<LandingInStyle | null> {
+      return this.getModel(`${this.baseUrl}/landing-blocks/in-style`, LandingInStyle.deJson);
+    }
+
+    /**
+     * Fetch the new-playlists block (`landing-blocks/new-playlists`).
+     *
+     * @remarks Requires authorization.
+     * @returns The items (`liked_playlist_item`), or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingBlocksNewPlaylists(): Promise<LandingBlockItems | null> {
+      return this.getModel(`${this.baseUrl}/landing-blocks/new-playlists`, LandingBlockItems.deJson);
+    }
+
+    /**
+     * Fetch the new-releases block (`landing-blocks/new-releases`).
+     *
+     * @remarks Requires authorization.
+     * @returns The releases, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingBlocksNewReleases(): Promise<LandingNewReleases | null> {
+      return this.getModel(`${this.baseUrl}/landing-blocks/new-releases`, LandingNewReleases.deJson);
+    }
+
+    /**
+     * Fetch the personal-playlists block (`landing-blocks/personal-playlists`:
+     * Playlist of the Day, Déjà vu, Premiere, …).
+     *
+     * @remarks Requires authorization.
+     * @returns The items (`personal_playlist_item`), or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingBlocksPersonalPlaylists(): Promise<LandingBlockItems | null> {
+      return this.getModel(`${this.baseUrl}/landing-blocks/personal-playlists`, LandingBlockItems.deJson);
+    }
+
+    /**
+     * Fetch a server-driven page layout (`landing/skeleton/{id}`).
+     *
+     * @param id - Skeleton id: `main`, `web_main`, `main_nologin`, `Search`,
+     *   `kids`, `non_music`, `web_collection`, `concerts`, …
+     * @param options - Optional `showWizard` and `locations` query parameters.
+     * @returns The skeleton, or `null`. Load a block's content with {@link landingBlockSource}.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingSkeleton(
+      id: string,
+      options: { showWizard?: boolean; locations?: Array<string | number> } = {},
+    ): Promise<LandingSkeleton | null> {
+      const result = await this.request.get(`${this.baseUrl}/landing/skeleton/${pathSegment(id)}`, {
+        showWizard: options.showWizard,
+        locations: options.locations?.length ? options.locations.join(',') : undefined,
+      });
+      return LandingSkeleton.deJson(result, this as unknown as Client);
+    }
+
+    /**
+     * Fetch the content of a skeleton block from its `data.source` (generic
+     * block fetch). Block payloads differ per block type, so the result is the
+     * unwrapped raw JSON.
+     *
+     * @param source - A {@link SkeletonSource} (its `count`/`countWeb` is sent as
+     *   `count`) or a path such as `/landing/block/chart`. Absolute URLs are
+     *   accepted only on the client's `baseUrl` origin.
+     * @param params - Extra query parameters (override `count`).
+     * @returns The raw block content.
+     * @throws {YandexMusicError} When the source has no URI or points at another host.
+     */
+    async landingBlockSource(source: SkeletonSource | string, params: Params = {}): Promise<JSONValue | undefined> {
+      const uri = typeof source === 'string' ? source : source.uri;
+      if (!uri) {
+        throw new YandexMusicError('skeleton source has no uri');
+      }
+      let url: string;
+      if (uri.startsWith('/')) {
+        url = `${this.baseUrl}${uri}`;
+      } else if (new URL(uri, this.baseUrl).origin === new URL(this.baseUrl).origin) {
+        url = uri;
+      } else {
+        throw new YandexMusicError(`skeleton source points outside the API: ${uri}`);
+      }
+      const count = typeof source === 'string' ? undefined : (source.countWeb ?? source.count);
+      return this.request.get(url, { ...(count !== undefined ? { count } : {}), ...params });
+    }
+
+    /**
+     * Fetch the chart block of the new landing (`landing/block/chart`).
+     *
+     * @returns The chart, or `null`.
+     * @throws {YandexMusicError} On any transport or API error.
+     */
+    async landingBlockChart(): Promise<ChartInfo | null> {
+      return this.getModel(`${this.baseUrl}/landing/block/chart`, ChartInfo.deJson);
     }
 
     /**
