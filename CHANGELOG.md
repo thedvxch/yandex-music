@@ -3,6 +3,10 @@
 All notable changes to `@dvxch/yandex-music` are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+- Новый логотип: разбросанная стопка книг («библиотека») вместо прежнего знака dvxch. Обновлены `assets/hero.svg`/`hero.png`, `favicon.svg`, `mark.svg`; добавлены одноцветные `mark-mono-dark.svg` и `mark-mono-light.svg`. Знак нарисован с нуля.
+
 ## 0.4.1 - 2026-11-27
 
 Security and reliability overhaul driven by a code review, plus endpoints found in
