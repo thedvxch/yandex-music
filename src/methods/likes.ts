@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { deList, isJsonObject } from '../base.js';
 import { Like, TracksList } from '../models/like.js';
 import { Artist } from '../models/artist/artist.js';
@@ -43,7 +44,7 @@ async function dislikeAction(
 ): Promise<boolean> {
   const uid = self.resolveUid(userId);
   const action = remove ? 'remove' : 'add-multiple';
-  const url = `${self.baseUrl}/users/${uid}/dislikes/${objectType}s/${action}`;
+  const url = `${self.baseUrl}/users/${pathSegment(uid)}/dislikes/${pathSegment(objectType)}s/${pathSegment(action)}`;
   const result = await self.request.post(url, { [`${objectType}-ids`]: ids });
   if (objectType === 'track') {
     return isJsonObject(result) && 'revision' in result;
@@ -71,7 +72,7 @@ async function likeAction(
 ): Promise<boolean> {
   const uid = self.resolveUid(userId);
   const action = remove ? 'remove' : 'add-multiple';
-  const url = `${self.baseUrl}/users/${uid}/likes/${objectType}s/${action}`;
+  const url = `${self.baseUrl}/users/${pathSegment(uid)}/likes/${pathSegment(objectType)}s/${pathSegment(action)}`;
   const result = await self.request.post(url, { [`${objectType}-ids`]: ids });
   if (objectType === 'track') {
     return isJsonObject(result) && 'revision' in result;
@@ -204,7 +205,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesTracks(userId?: string | number, ifModifiedSinceRevision?: number): Promise<TracksList | null> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/likes/tracks`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/likes/tracks`;
       const result = await this.request.get(url, revisionParams(ifModifiedSinceRevision));
       const library = isJsonObject(result) ? result['library'] : undefined;
       return TracksList.deJson(library, this as unknown as Client);
@@ -220,7 +221,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesAlbums(userId?: string | number, rich = true): Promise<Like[]> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/albums`, {
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/likes/albums`, {
         rich: String(rich),
       });
       return deList(Like.deJson, result, this as unknown as Client);
@@ -237,7 +238,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesArtists(userId?: string | number): Promise<Artist[]> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/artists`);
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/likes/artists`);
       const items = Array.isArray(result)
         ? result.map((item) => (isJsonObject(item) && isJsonObject(item['artist']) ? item['artist'] : item))
         : result;
@@ -253,7 +254,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesArtistsWithTimestamps(userId?: string | number): Promise<Like[]> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/artists`, {
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/likes/artists`, {
         'with-timestamps': 'true',
       });
       return Like.deListTyped(result, this as unknown as Client, 'artist');
@@ -268,7 +269,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesPlaylists(userId?: string | number): Promise<Like[]> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/playlists`);
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/likes/playlists`);
       return deList(Like.deJson, result, this as unknown as Client);
     }
 
@@ -283,7 +284,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
     async usersDislikesTracks(userId?: string | number, ifModifiedSinceRevision?: number): Promise<TracksList | null> {
       const uid = this.resolveUid(userId);
       const result = await this.request.get(
-        `${this.baseUrl}/users/${uid}/dislikes/tracks`,
+        `${this.baseUrl}/users/${pathSegment(uid)}/dislikes/tracks`,
         revisionParams(ifModifiedSinceRevision),
       );
       const library = isJsonObject(result) ? result['library'] : undefined;
@@ -329,7 +330,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersDislikesArtists(userId?: string | number): Promise<Artist[]> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/dislikes/artists`);
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/dislikes/artists`);
       return deList(Artist.deJson, result, this as unknown as Client);
     }
 
@@ -372,7 +373,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesClips(userId?: string | number, page = 0, pageSize = 20): Promise<ClipsWillLike | null> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/likes/clips`, {
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/likes/clips`, {
         page,
         pageSize,
       });
@@ -389,7 +390,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesClipsAdd(clipId: string | number, userId?: string | number): Promise<boolean> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.send('POST', `${this.baseUrl}/users/${uid}/likes/clips/add`, {
+      const result = await this.request.send('POST', `${this.baseUrl}/users/${pathSegment(uid)}/likes/clips/add`, {
         params: { 'clip-id': clipId },
       });
       // Unlike every sibling like/dislike action, this endpoint's success response
@@ -408,7 +409,7 @@ export function LikesMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async usersLikesClipsRemove(clipId: string | number, userId?: string | number): Promise<boolean> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.post(`${this.baseUrl}/users/${uid}/likes/clips/${clipId}/remove`);
+      const result = await this.request.post(`${this.baseUrl}/users/${pathSegment(uid)}/likes/clips/${pathSegment(clipId)}/remove`);
       // See usersLikesClipsAdd — response shape unconfirmed, kept object-tolerant.
       return result === 'ok' || isJsonObject(result);
     }

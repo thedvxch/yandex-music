@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { deList, isJsonObject } from '../base.js';
 import { Status } from '../models/account/account.js';
 import {
@@ -204,7 +205,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async rotorStationInfo(station: string): Promise<StationResult[]> {
-      const result = await this.request.get(`${this.baseUrl}/rotor/station/${station}/info`);
+      const result = await this.request.get(`${this.baseUrl}/rotor/station/${pathSegment(station)}/info`);
       return deList(StationResult.deJson, result, this as unknown as Client);
     }
 
@@ -216,7 +217,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async rotorStationStream(station: string): Promise<GenerativeStream | null> {
-      const result = await this.request.get(`${this.baseUrl}/rotor/station/${station}/stream`);
+      const result = await this.request.get(`${this.baseUrl}/rotor/station/${pathSegment(station)}/stream`);
       return GenerativeStream.deJson(result, this as unknown as Client);
     }
 
@@ -240,7 +241,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       if (streamId) {
         params['streamId'] = streamId;
       }
-      const result = await this.request.send('POST', `${this.baseUrl}/rotor/station/${station}/feedback`, {
+      const result = await this.request.send('POST', `${this.baseUrl}/rotor/station/${pathSegment(station)}/feedback`, {
         params,
         json: { type, timestamp: timestampOrNow(timestamp) },
       });
@@ -261,7 +262,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       settings2 = true,
       queue?: string | number,
     ): Promise<StationTracksResult | null> {
-      const url = `${this.baseUrl}/rotor/station/${station}/tracks`;
+      const url = `${this.baseUrl}/rotor/station/${pathSegment(station)}/tracks`;
       const params: Record<string, string | number> = {};
       if (queue !== undefined && queue !== '' && queue !== 0) {
         params['queue'] = queue;
@@ -316,7 +317,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       if (options.totalPlayedSeconds !== undefined && options.totalPlayedSeconds !== 0) {
         data['totalPlayedSeconds'] = options.totalPlayedSeconds;
       }
-      const result = await this.request.send('POST', `${this.baseUrl}/rotor/station/${station}/feedback`, {
+      const result = await this.request.send('POST', `${this.baseUrl}/rotor/station/${pathSegment(station)}/feedback`, {
         params,
         json: data,
       });
@@ -426,7 +427,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       language: RotorLanguage = 'not-russian',
       type: RotorStationType = 'rotor',
     ): Promise<boolean> {
-      const url = `${this.baseUrl}/rotor/station/${station}/settings3`;
+      const url = `${this.baseUrl}/rotor/station/${pathSegment(station)}/settings3`;
       const data: { [k: string]: JsonInput } = { moodEnergy, diversity, type };
       if (language) {
         data['language'] = language;
@@ -595,7 +596,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       if (options.feedbacks !== undefined && options.feedbacks.length > 0) {
         body['feedbacks'] = options.feedbacks.map(feedbackBody);
       }
-      const result = await this.request.postJson(`${this.baseUrl}/rotor/session/${sessionId}/tracks`, body);
+      const result = await this.request.postJson(`${this.baseUrl}/rotor/session/${pathSegment(sessionId)}/tracks`, body);
       return RotorSessionTracks.deJson(result, this as unknown as Client);
     }
 
@@ -609,7 +610,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async rotorSessionClone(sessionId: string, options: RotorSessionOptions = {}): Promise<ClonedSession | null> {
       const result = await this.request.postJson(
-        `${this.baseUrl}/rotor/session/${sessionId}/clone`,
+        `${this.baseUrl}/rotor/session/${pathSegment(sessionId)}/clone`,
         sessionBody(options),
       );
       return ClonedSession.deJson(result, this as unknown as Client);
@@ -632,7 +633,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       from?: string,
     ): Promise<boolean> {
       const result = await this.request.postJson(
-        `${this.baseUrl}/rotor/session/${sessionId}/feedback`,
+        `${this.baseUrl}/rotor/session/${pathSegment(sessionId)}/feedback`,
         feedbackBody({ event, batchId, from }),
       );
       return isJsonObject(result);
@@ -727,7 +728,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async rotorSessionFeedbacks(sessionId: string, feedbacks: SessionFeedbackInput[]): Promise<boolean> {
-      const result = await this.request.postJson(`${this.baseUrl}/rotor/session/${sessionId}/feedbacks`, {
+      const result = await this.request.postJson(`${this.baseUrl}/rotor/session/${pathSegment(sessionId)}/feedbacks`, {
         feedbacks: feedbacks.map(feedbackBody),
       });
       return isJsonObject(result);
@@ -745,7 +746,7 @@ export function RadioMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
       sessionId: string,
       queue: CombinedSessionQueueInput[] = [],
     ): Promise<CombinedSession | null> {
-      const result = await this.request.postJson(`${this.baseUrl}/rotor/combined/session/${sessionId}/next`, {
+      const result = await this.request.postJson(`${this.baseUrl}/rotor/combined/session/${pathSegment(sessionId)}/next`, {
         queue: queueBody(queue),
       });
       return CombinedSession.deJson(result, this as unknown as Client);

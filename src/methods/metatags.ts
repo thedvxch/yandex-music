@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import {
   Metatag,
   MetatagAlbums,
@@ -59,7 +60,7 @@ export function MetatagsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async metatag(metatagId: string, options: MetatagOptions = {}): Promise<Metatag | null> {
-      const result = await this.request.get(`${this.baseUrl}/metatags/${metatagId}`, { ...options });
+      const result = await this.request.get(`${this.baseUrl}/metatags/${pathSegment(metatagId)}`, { ...options });
       return Metatag.deJson(result, this as unknown as Client);
     }
 
@@ -78,7 +79,7 @@ export function MetatagsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       const params: Params = { offset: options.offset ?? 0, limit: options.limit ?? 25 };
       if (options.period !== undefined) params['period'] = options.period;
       if (options.sortBy !== undefined) params['sortBy'] = options.sortBy;
-      const result = await this.request.get(`${this.baseUrl}/metatags/${metatagId}/albums`, params);
+      const result = await this.request.get(`${this.baseUrl}/metatags/${pathSegment(metatagId)}/albums`, params);
       return MetatagAlbums.deJson(result, this as unknown as Client);
     }
 
@@ -101,7 +102,7 @@ export function MetatagsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       };
       if (options.sortBy !== undefined) params['sortBy'] = options.sortBy;
       if (options.tracksPerArtist !== undefined) params['tracksPerArtist'] = options.tracksPerArtist;
-      const result = await this.request.get(`${this.baseUrl}/metatags/${metatagId}/artists`, params);
+      const result = await this.request.get(`${this.baseUrl}/metatags/${pathSegment(metatagId)}/artists`, params);
       return MetatagArtists.deJson(result, this as unknown as Client);
     }
 
@@ -120,7 +121,7 @@ export function MetatagsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       const params: Params = { offset: options.offset ?? 0, limit: options.limit ?? 25 };
       if (options.sortBy !== undefined) params['sortBy'] = options.sortBy;
       if (options.withLikesCount !== undefined) params['withLikesCount'] = String(options.withLikesCount);
-      const result = await this.request.get(`${this.baseUrl}/metatags/${metatagId}/playlists`, params);
+      const result = await this.request.get(`${this.baseUrl}/metatags/${pathSegment(metatagId)}/playlists`, params);
       return MetatagPlaylists.deJson(result, this as unknown as Client);
     }
   }

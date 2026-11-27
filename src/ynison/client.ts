@@ -303,10 +303,21 @@ async function loadWebSocket(): Promise<typeof WsSocket> {
   }
 }
 
+/**
+ * An OAuth token, or a function returning the current one. A function is called
+ * on every connect, so a rotated token reaches the next (re)connection.
+ */
+export type TokenSource = string | (() => string | undefined | Promise<string | undefined>);
+
+/** Resolve a {@link TokenSource} to a token string (`''` when none). */
+export async function resolveToken(source: TokenSource): Promise<string> {
+  return (typeof source === 'function' ? await source() : source) ?? '';
+}
+
 /** Options for {@link YnisonClient}. */
 export interface YnisonClientOptions {
-  /** OAuth token. */
-  token: string;
+  /** OAuth token, or a provider evaluated on every {@link YnisonClient.connect}. */
+  token: TokenSource;
   /** Device id. Defaults to a random id. */
   deviceId?: string;
   /** Device identity override for the full-state request. */
@@ -330,7 +341,9 @@ export interface YnisonClientOptions {
  * Reconnection is not built in; callers drive it (see the realtime client).
  */
 export class YnisonClient {
-  private readonly token: string;
+  private readonly tokenSource: TokenSource;
+  /** Token resolved by the current {@link connect}. */
+  private token = '';
   private readonly deviceId: string;
   private readonly deviceInfo: DeviceInfoOverride | null;
   private redirect: RedirectResponse | null = null;
@@ -352,7 +365,7 @@ export class YnisonClient {
   private latest: YnisonState | null = null;
 
   constructor(opts: YnisonClientOptions) {
-    this.token = opts.token;
+    this.tokenSource = opts.token;
     this.deviceId = opts.deviceId ?? generateDeviceId();
     this.deviceInfo = opts.deviceInfo ?? null;
     this.redirectUrl = opts.redirectUrl ?? DEFAULT_REDIRECT_URL;
@@ -404,7 +417,7 @@ export class YnisonClient {
     }
   }
 
-  private headers():Record<string, string> {
+  private headers(): Record<string, string> {
     return { Origin: 'https://music.yandex.ru', Authorization: `OAuth ${this.token}` };
   }
 
@@ -543,7 +556,9 @@ export class YnisonClient {
           return;
         }
         this.latest = state;
-        for (const l of this.listeners) {
+        // Iterate a snapshot: a listener that unsubscribes during dispatch (as
+        // waitFirstState does) must not make the next listener miss this frame.
+        for (const l of [...this.listeners]) {
           try {
             // Promise.resolve() passes a rejecting async listener's promise
             // through unchanged, so .catch() below traps it too — not just a
@@ -598,19 +613,27 @@ export class YnisonClient {
    */
   async connect(redirectTimeoutMs: number = this.connectTimeoutMs): Promise<void> {
     if (this.closed) throw new YnisonError('client already closed');
+    this.token = await resolveToken(this.tokenSource);
+    if (!this.token) throw new YnisonUnauthorizedError('a token is required for Ynison');
+    if (this.closed) return;
     await this.connectRedirect(redirectTimeoutMs);
     if (this.closed) return;
     await this.connectState();
   }
 
   /**
-   * Wait for the first state frame.
+   * Wait for the first state frame. Resolves immediately with
+   * {@link latestState} when a frame already arrived (an idle player may not
+   * send another one for minutes).
    *
    * @param timeoutMs - How long to wait.
    * @returns The first {@link YnisonState}.
    * @throws {YnisonError} When no frame arrives in time.
    */
   waitFirstState(timeoutMs: number): Promise<YnisonState> {
+    if (this.latest) {
+      return Promise.resolve(this.latest);
+    }
     return new Promise<YnisonState>((resolve, reject) => {
       let done = false;
       let unsubscribe!: () => void;
@@ -695,19 +718,26 @@ export class YnisonClient {
     this.sendRaw(buildSetVolumeRequest(this.deviceId, target, volume));
   }
 
-  /** Close both sockets (best-effort, idempotent). */
-  disconnect(): void {
+  /**
+   * Close both sockets (best-effort, idempotent).
+   *
+   * @param options - `force: true` destroys the sockets (`terminate()`) instead
+   *   of a close handshake. Use it for a dead pipe: a close frame that is never
+   *   acknowledged keeps the session pending for the `ws` close timeout (30 s).
+   */
+  disconnect(options: { force?: boolean } = {}): void {
     this.closed = true;
     this.clearPing();
-    try {
-      this.redirectWs?.close();
-    } catch {
-      /* ignore */
-    }
-    try {
-      this.stateWs?.close();
-    } catch {
-      /* ignore */
+    for (const ws of [this.redirectWs, this.stateWs]) {
+      try {
+        if (options.force) {
+          ws?.terminate();
+        } else {
+          ws?.close();
+        }
+      } catch {
+        /* ignore */
+      }
     }
   }
 }

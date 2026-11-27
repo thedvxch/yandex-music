@@ -18,8 +18,13 @@ import type { Transform } from 'node:stream';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import {
   AbortedError,
+  BadGatewayError,
   BadRequestError,
+  ClientError,
   ConflictError,
+  ForbiddenError,
+  GoneError,
+  InvalidResponseError,
   NetworkError,
   NotFoundError,
   PayloadTooLargeError,
@@ -36,8 +41,16 @@ import type { JSONValue } from './types.js';
 /** `User-Agent` sent with every request. */
 export const USER_AGENT = 'dvxch-yandex-music';
 
-/** Default per-request timeout in milliseconds. */
+/** Default per-request timeout in milliseconds: the time allowed until response headers arrive. */
 export const DEFAULT_TIMEOUT_MS = 5000;
+
+/**
+ * Default budget (ms) for reading a JSON/metadata response body once the headers
+ * arrived. Large payloads (`tracks(500 ids)`, big playlists) on a slow link need
+ * more than the headers timeout; the effective body budget is
+ * `max(timeout, bodyTimeout)`.
+ */
+export const DEFAULT_BODY_TIMEOUT_MS = 30_000;
 
 /**
  * Default timeout for raw downloads ({@link Request.retrieve} / {@link Request.download}).
@@ -158,8 +171,10 @@ export interface RequestInit {
    * @deprecated Ignored. Pass a proxy-capable `fetch` (undici `ProxyAgent` / `node-wreq`) instead.
    */
   proxyUrl?: string;
-  /** Default timeout in milliseconds. Defaults to {@link DEFAULT_TIMEOUT_MS}. */
+  /** Default timeout in milliseconds until response headers arrive. Defaults to {@link DEFAULT_TIMEOUT_MS}. */
   timeout?: number;
+  /** Budget in ms for reading the body after the headers arrived. Defaults to {@link DEFAULT_BODY_TIMEOUT_MS}. */
+  bodyTimeout?: number;
   /** `fetch` implementation to use. Defaults to the global `fetch`. */
   fetch?: FetchLike;
   /** `User-Agent` header value. Defaults to {@link USER_AGENT}. */
@@ -255,6 +270,40 @@ function originOf(url: string): string | null {
   }
 }
 
+/** Error codes of local (file-system) failures that no retry can fix. */
+const LOCAL_ERROR_CODES = new Set([
+  'ENOSPC',
+  'EDQUOT',
+  'EACCES',
+  'EPERM',
+  'EISDIR',
+  'ENOTDIR',
+  'EROFS',
+  'EMFILE',
+  'ENFILE',
+  'EEXIST',
+  'ENAMETOOLONG',
+  'EBUSY',
+]);
+
+/** File-system syscalls whose `ENOENT` means a missing directory, not a network problem. */
+const FS_SYSCALLS = new Set(['open', 'rename', 'mkdir', 'unlink', 'stat', 'lstat', 'copyfile']);
+
+/** Whether `error` is a local file-system or crypto failure (not a transport one). */
+function isLocalFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const { code, syscall } = error as NodeJS.ErrnoException;
+  if (typeof code !== 'string') {
+    return false;
+  }
+  if (code.startsWith('ERR_CRYPTO') || code.startsWith('ERR_OSSL') || LOCAL_ERROR_CODES.has(code)) {
+    return true;
+  }
+  return code === 'ENOENT' && typeof syscall === 'string' && FS_SYSCALLS.has(syscall);
+}
+
 /** Unique sibling path a download is written to before the atomic rename. */
 function partPath(filename: string): string {
   return `${filename}.${randomUUID().slice(0, 8)}.part`;
@@ -335,8 +384,10 @@ export class Request {
    * @deprecated Ignored. Pass a proxy-capable `fetch` (undici `ProxyAgent` / `node-wreq`) instead.
    */
   proxyUrl?: string;
-  /** Default timeout in milliseconds. */
+  /** Default timeout in milliseconds (until response headers arrive). */
   timeout: number;
+  /** Budget in ms for reading a response body after the headers arrived. */
+  bodyTimeout: number;
   /** The owning client (non-enumerable, so serializing the transport does not walk back into the client). */
   declare client?: Client;
   /** `User-Agent` sent with every request. */
@@ -363,6 +414,7 @@ export class Request {
     this.headers = { ...BASE_HEADERS, ...options.headers };
     this.proxyUrl = options.proxyUrl;
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+    this.bodyTimeout = options.bodyTimeout ?? DEFAULT_BODY_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? (globalThis.fetch as FetchLike);
     this.userAgent = options.userAgent ?? USER_AGENT;
     this.retries = normalizeRetries(options.retries ?? 2);
@@ -430,6 +482,8 @@ export class Request {
     this.client = client;
     if (client.token) {
       this.setAuthorization(client.token);
+    } else {
+      this.clearAuthorization();
     }
     return client;
   }
@@ -573,15 +627,18 @@ export class Request {
   /**
    * Perform a `GET` request and return the raw response bytes without parsing.
    *
-   * Used for non-JSON payloads such as download-info XML and audio files.
+   * Used for non-JSON payloads such as download-info XML, lyrics and audio.
+   * Defaults to the JSON timeout (small metadata); pass a larger `timeout` (for
+   * example {@link DEFAULT_DOWNLOAD_TIMEOUT_MS}) to buffer a whole audio file.
    *
    * @param url - Absolute request URL.
    * @param timeout - Optional per-call timeout override (milliseconds).
+   * @param options - Optional `signal` / `retries`.
    * @returns The raw response body.
    * @throws {YandexMusicError} On any transport or API error.
    */
-  async retrieve(url: string, timeout: number = DEFAULT_DOWNLOAD_TIMEOUT_MS, options: RequestOptions = {}): Promise<Uint8Array> {
-    return this.requestWrapper('GET', url, undefined, { ...options, timeout });
+  async retrieve(url: string, timeout?: number, options: RequestOptions = {}): Promise<Uint8Array> {
+    return this.requestWrapper('GET', url, undefined, { ...options, timeout: timeout ?? options.timeout });
   }
 
   /**
@@ -702,7 +759,11 @@ export class Request {
       if (signal?.aborted) {
         throw abortedError(signal);
       }
-      let lastError: unknown = error instanceof RaceFailed ? undefined : error;
+      const wrapped = error instanceof RaceFailed ? undefined : this.wrapTransportError(error, signal);
+      if (wrapped instanceof YandexMusicError && wrapped.status === undefined && !wrapped.retryable) {
+        throw wrapped;
+      }
+      let lastError: unknown = wrapped;
       for (const url of urls) {
         const remaining = deadline - Date.now();
         if (remaining <= 0) break;
@@ -711,7 +772,8 @@ export class Request {
           return;
         } catch (e) {
           lastError = e;
-          if (e instanceof AbortedError) {
+          // Caller abort, disk full, bad key: another mirror cannot help.
+          if (e instanceof YandexMusicError && e.status === undefined && !e.retryable) {
             break;
           }
         }
@@ -821,6 +883,11 @@ export class Request {
     if (error instanceof Error && error.name === 'AbortError') {
       return new TimedOutError();
     }
+    if (isLocalFailure(error)) {
+      // Disk full, permission denied, bad decryption key: retrying another
+      // attempt or mirror cannot help, so it is final and not a NetworkError.
+      return new YandexMusicError((error as Error).message, { cause: error, retryable: false });
+    }
     return new NetworkError(error instanceof Error ? error.message : String(error), { cause: error });
   }
 
@@ -876,24 +943,35 @@ export class Request {
     const retries = normalizeRetries(options.retries ?? defaults.retries ?? this.retries);
     const maxAttempts = method === 'GET' || options.retry === true ? retries + 1 : 1;
     let lastError: unknown;
+    let refreshed = false;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (signal?.aborted) {
         throw abortedError(signal);
       }
+      const sentToken = this.client?.token;
       try {
         return await this.attemptRequest(method, url, body, timeout, options.headers, signal);
       } catch (error) {
         lastError = error;
-        // Retry only transient transport/server failures. NetworkError covers
-        // connection resets and 5xx; TimedOutError covers stalls. Its 4xx
-        // subclasses (Bad Request, Not Found, Conflict, Payload Too Large) and
-        // auth errors are deterministic — never retried.
-        const retryable =
-          (error instanceof NetworkError || error instanceof TimedOutError) &&
-          !(error instanceof BadRequestError) &&
-          !(error instanceof NotFoundError) &&
-          !(error instanceof ConflictError) &&
-          !(error instanceof PayloadTooLargeError);
+        // A 401 from the API: let the client refresh the token once (single
+        // flight, see ClientOptions.onUnauthorized) and repeat the request
+        // without spending a retry. 403 (ForbiddenError) is never refreshed.
+        if (
+          !refreshed &&
+          error instanceof UnauthorizedError &&
+          !(error instanceof ForbiddenError) &&
+          this.client &&
+          this.isAuthOrigin(url) &&
+          (await this.client.refreshAuth(error, sentToken))
+        ) {
+          refreshed = true;
+          attempt -= 1;
+          continue;
+        }
+        // Retry exactly the errors marked retryable: transport failures,
+        // timeouts and the transient statuses 408/425/429/5xx. Every other
+        // 4xx, auth errors, local I/O failures and caller aborts are final.
+        const retryable = error instanceof YandexMusicError && error.retryable;
         if (attempt === maxAttempts - 1 || !retryable) {
           throw error;
         }
@@ -917,7 +995,7 @@ export class Request {
   ): Promise<Uint8Array> {
     const controller = new AbortController();
     const ms = timeout ?? this.timeout;
-    const timer = setTimeout(() => controller.abort(), ms);
+    let timer = setTimeout(() => controller.abort(), ms);
     const unforward = forwardAbort(signal, controller);
 
     const headers = this.buildHeaders(url, extraHeaders);
@@ -934,9 +1012,11 @@ export class Request {
         body: body?.body,
         signal: controller.signal,
       });
-      // Read the body under the same deadline: the timeout must cover the full
-      // download, not just the headers — a stalled body stream (broken pipe with
-      // no RST) would otherwise hang forever.
+      // The body read runs under its own deadline, max(timeout, bodyTimeout):
+      // large JSON on a slow link needs longer than the time-to-headers, yet a
+      // stalled body stream (broken pipe with no RST) must not hang forever.
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(), Math.max(ms, this.bodyTimeout));
       const content = new Uint8Array(await response.arrayBuffer());
       if (response.status >= 200 && response.status <= 299) {
         return content;
@@ -955,10 +1035,18 @@ export class Request {
     try {
       data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as JSONValue;
     } catch (error) {
-      throw new YandexMusicError(`Invalid server response: ${error instanceof Error ? error.message : String(error)}`);
+      throw new InvalidResponseError(`Invalid server response: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     if (isJsonObject(data)) {
+      // A 2xx body with an `error` and no `result` is a failure the API
+      // reported in-band; returning it as data would yield a half-empty model.
+      const inBandError = data['error'];
+      if (!('result' in data) && (typeof inBandError === 'string' || isJsonObject(inBandError))) {
+        throw new InvalidResponseError(this.extractErrorMessage(bytes) || 'API returned an error', {
+          code: this.extractErrorCode(bytes),
+        });
+      }
       // The API wraps payloads in `{ result, invocationInfo }`. Detect the
       // envelope by key presence so a legitimate `result: null` is preserved
       // (and unwrapped responses, e.g. OAuth, pass through as-is).
@@ -1068,8 +1156,11 @@ export class Request {
     const info = { status, code };
     const withStatus = (m: string): string => (m.startsWith(`HTTP ${status}`) ? m : `${m} (${status})`);
 
-    if (status === 401 || status === 403) {
+    if (status === 401) {
       throw new UnauthorizedError(message, info);
+    }
+    if (status === 403) {
+      throw new ForbiddenError(message, info);
     }
     if (status === 400) {
       throw new BadRequestError(message, info);
@@ -1080,6 +1171,9 @@ export class Request {
     if (status === 409) {
       throw new ConflictError(message, info);
     }
+    if (status === 410) {
+      throw new GoneError(withStatus(message), info);
+    }
     if (status === 413) {
       throw new PayloadTooLargeError(message, info);
     }
@@ -1087,13 +1181,17 @@ export class Request {
       throw new TooManyRequestsError(message, { ...info, retryAfterMs: this.parseRetryAfter(headers) });
     }
     if (status === 502) {
-      // Kept as a plain NetworkError (pinned by the existing 0.3.0 tests).
-      throw new NetworkError('Bad Gateway', info);
+      // Message kept from 0.4.0 (which threw a plain NetworkError); still a NetworkError.
+      throw new BadGatewayError('Bad Gateway', { ...info, retryAfterMs: this.parseRetryAfter(headers) });
     }
     if (status >= 500 && status <= 599) {
       const retryAfterMs = status === 503 ? this.parseRetryAfter(headers) : undefined;
       throw new ServerError(withStatus(message), { ...info, retryAfterMs });
     }
+    if (status >= 400 && status <= 499 && status !== 408 && status !== 425) {
+      throw new ClientError(withStatus(message), info);
+    }
+    // 408 / 425 (retryable by status) and unexpected 1xx/3xx.
     throw new NetworkError(withStatus(message), info);
   }
 }

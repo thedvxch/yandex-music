@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { deList } from '../base.js';
 import { Disclaimer, DisclaimerEntry } from '../models/disclaimer.js';
 import type { AbstractConstructor } from './mixin.js';
@@ -26,7 +27,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksDisclaimer(trackId: string | number): Promise<Disclaimer | null> {
-      return this.getModel(`${this.baseUrl}/tracks/${trackId}/disclaimer`, Disclaimer.deJson);
+      return this.getModel(`${this.baseUrl}/tracks/${pathSegment(trackId)}/disclaimer`, Disclaimer.deJson);
     }
 
     /**
@@ -37,7 +38,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async clipsDisclaimer(clipId: string | number): Promise<Disclaimer | null> {
-      return this.getModel(`${this.baseUrl}/clips/${clipId}/disclaimer`, Disclaimer.deJson);
+      return this.getModel(`${this.baseUrl}/clips/${pathSegment(clipId)}/disclaimer`, Disclaimer.deJson);
     }
 
     /**
@@ -48,7 +49,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsDisclaimer(albumId: string | number): Promise<Disclaimer | null> {
-      return this.getModel(`${this.baseUrl}/albums/${albumId}/disclaimer`, Disclaimer.deJson);
+      return this.getModel(`${this.baseUrl}/albums/${pathSegment(albumId)}/disclaimer`, Disclaimer.deJson);
     }
 
     /**
@@ -59,7 +60,7 @@ export function DisclaimersMixin<TBase extends AbstractConstructor<ClientBase>>(
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsDisclaimer(artistId: string | number): Promise<Disclaimer | null> {
-      return this.getModel(`${this.baseUrl}/artists/${artistId}/disclaimer`, Disclaimer.deJson);
+      return this.getModel(`${this.baseUrl}/artists/${pathSegment(artistId)}/disclaimer`, Disclaimer.deJson);
     }
 
     /**

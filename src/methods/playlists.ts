@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { deList, isJsonObject } from '../base.js';
 import { Playlist } from '../models/playlist/playlist.js';
 import {
@@ -39,7 +40,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      */
     async usersSettings(userId?: string | number): Promise<UserSettings | null> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/settings`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/settings`;
       const result = await this.request.get(url);
       const settings = isJsonObject(result) ? result['userSettings'] : undefined;
       return UserSettings.deJson(settings, this as unknown as Client);
@@ -59,11 +60,11 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
     ): Promise<Playlist | Playlist[] | null> {
       const uid = this.resolveUid(userId);
       if (Array.isArray(kind)) {
-        const url = `${this.baseUrl}/users/${uid}/playlists`;
+        const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists`;
         const result = await this.request.post(url, { kinds: kind });
         return deList(Playlist.deJson, result, this as unknown as Client);
       }
-      return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}`, Playlist.deJson);
+      return this.getModel(`${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}`, Playlist.deJson);
     }
 
     /**
@@ -79,7 +80,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<PlaylistRecommendations | null> {
       const uid = this.resolveUid(userId);
-      return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}/recommendations`, PlaylistRecommendations.deJson);
+      return this.getModel(`${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}/recommendations`, PlaylistRecommendations.deJson);
     }
 
     /**
@@ -97,7 +98,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<Playlist | null> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/playlists/create`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/create`;
       const result = await this.request.post(url, { title, visibility });
       return Playlist.deJson(result, this as unknown as Client);
     }
@@ -112,7 +113,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      */
     async usersPlaylistsDelete(kind: string | number, userId?: string | number): Promise<boolean> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/delete`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}/delete`;
       const result = await this.request.post(url);
       return result === 'ok';
     }
@@ -132,7 +133,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<Playlist | null> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/name`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}/name`;
       const result = await this.request.post(url, { value: name });
       return Playlist.deJson(result, this as unknown as Client);
     }
@@ -152,7 +153,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<Playlist | null> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/visibility`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}/visibility`;
       const result = await this.request.post(url, { value: visibility });
       return Playlist.deJson(result, this as unknown as Client);
     }
@@ -172,7 +173,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<Playlist | null> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/description`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}/description`;
       const result = await this.request.post(url, { value: description });
       return Playlist.deJson(result, this as unknown as Client);
     }
@@ -199,7 +200,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
         const current = await this.usersPlaylists(kind, uid);
         revision = (Array.isArray(current) ? undefined : current?.revision) ?? 1;
       }
-      const url = `${this.baseUrl}/users/${uid}/playlists/${kind}/change`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}/change`;
       const result = await this.request.post(url, { kind, revision, diff });
       return Playlist.deJson(result, this as unknown as Client);
     }
@@ -274,7 +275,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      */
     async usersPlaylistsList(userId?: string | number): Promise<Playlist[]> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/playlists/list`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/list`;
       const result = await this.request.get(url);
       return deList(Playlist.deJson, result, this as unknown as Client);
     }
@@ -287,7 +288,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async playlist(playlistUuid: string): Promise<Playlist | null> {
-      return this.getModel(`${this.baseUrl}/playlist/${playlistUuid}`, Playlist.deJson);
+      return this.getModel(`${this.baseUrl}/playlist/${pathSegment(playlistUuid)}`, Playlist.deJson);
     }
 
     /**
@@ -298,7 +299,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async playlistSimilarEntities(playlistUuid: string): Promise<PlaylistSimilarEntities | null> {
-      return this.getModel(`${this.baseUrl}/playlist/${playlistUuid}/similar-entities`, PlaylistSimilarEntities.deJson);
+      return this.getModel(`${this.baseUrl}/playlist/${pathSegment(playlistUuid)}/similar-entities`, PlaylistSimilarEntities.deJson);
     }
 
     /**
@@ -342,7 +343,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      * @throws {YandexMusicError} On any transport or API error.
      */
     async playlistsPersonal(playlistId: string): Promise<GeneratedPlaylist | null> {
-      return this.getModel(`${this.baseUrl}/playlists/personal/${playlistId}`, GeneratedPlaylist.deJson);
+      return this.getModel(`${this.baseUrl}/playlists/personal/${pathSegment(playlistId)}`, GeneratedPlaylist.deJson);
     }
 
     /**
@@ -358,7 +359,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
       userId?: string | number,
     ): Promise<PlaylistTrailer | null> {
       const uid = this.resolveUid(userId);
-      return this.getModel(`${this.baseUrl}/users/${uid}/playlists/${kind}/trailer`, PlaylistTrailer.deJson);
+      return this.getModel(`${this.baseUrl}/users/${pathSegment(uid)}/playlists/${pathSegment(kind)}/trailer`, PlaylistTrailer.deJson);
     }
 
     /**
@@ -370,7 +371,7 @@ export function PlaylistsMixin<TBase extends AbstractConstructor<ClientBase>>(Ba
      */
     async usersPlaylistsKinds(userId?: string | number): Promise<number[]> {
       const uid = this.resolveUid(userId);
-      const url = `${this.baseUrl}/users/${uid}/playlists/list/kinds`;
+      const url = `${this.baseUrl}/users/${pathSegment(uid)}/playlists/list/kinds`;
       const result = await this.request.get(url);
       return Array.isArray(result) ? (result.filter((x) => typeof x === 'number') as number[]) : [];
     }

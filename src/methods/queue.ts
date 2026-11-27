@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { deList, isJsonObject } from '../base.js';
 import { Queue, QueueItem } from '../models/queue/queue.js';
 import type { AbstractConstructor } from './mixin.js';
@@ -47,7 +48,7 @@ export function QueueMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      * @throws {YandexMusicError} On any transport or API error.
      */
     async queue(queueId: string): Promise<Queue | null> {
-      const result = await this.request.get(`${this.baseUrl}/queues/${queueId}`);
+      const result = await this.request.get(`${this.baseUrl}/queues/${pathSegment(queueId)}`);
       return Queue.deJson(result, this as unknown as Client);
     }
 
@@ -62,7 +63,7 @@ export function QueueMixin<TBase extends AbstractConstructor<ClientBase>>(Base: 
      */
     async queueUpdatePosition(queueId: string, currentIndex: number, device?: string): Promise<boolean> {
       const extraHeaders = { [DEVICE_HEADER]: device || this.device };
-      const result = await this.request.send('POST', `${this.baseUrl}/queues/${queueId}/update-position`, {
+      const result = await this.request.send('POST', `${this.baseUrl}/queues/${pathSegment(queueId)}/update-position`, {
         params: { currentIndex },
         form: { isInteractive: 'false' },
         headers: extraHeaders,

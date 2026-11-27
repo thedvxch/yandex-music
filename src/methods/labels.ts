@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { Label } from '../models/album/album.js';
 import { LabelAlbums, LabelArtists } from '../models/label/labelExtras.js';
 import type { ArtistAlbumsSortBy, SortOrder } from './artists.js';
@@ -27,7 +28,7 @@ export function LabelsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async label(labelId: string | number): Promise<Label | null> {
-      return this.getModel(`${this.baseUrl}/labels/${labelId}`, Label.deJson);
+      return this.getModel(`${this.baseUrl}/labels/${pathSegment(labelId)}`, Label.deJson);
     }
 
     /**
@@ -51,7 +52,7 @@ export function LabelsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
       const params: Record<string, string | number> = { page, pageSize };
       if (sortBy !== undefined) params['sortBy'] = sortBy;
       if (sortOrder !== undefined) params['sortOrder'] = sortOrder;
-      const result = await this.request.get(`${this.baseUrl}/labels/${labelId}/albums`, params);
+      const result = await this.request.get(`${this.baseUrl}/labels/${pathSegment(labelId)}/albums`, params);
       return LabelAlbums.deJson(result, this as unknown as Client);
     }
 
@@ -65,7 +66,7 @@ export function LabelsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async labelArtists(labelId: string | number, page = 0, pageSize = 100): Promise<LabelArtists | null> {
-      const result = await this.request.get(`${this.baseUrl}/labels/${labelId}/artists`, { page, pageSize });
+      const result = await this.request.get(`${this.baseUrl}/labels/${pathSegment(labelId)}/artists`, { page, pageSize });
       return LabelArtists.deJson(result, this as unknown as Client);
     }
   }

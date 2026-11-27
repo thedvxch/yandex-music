@@ -18,8 +18,8 @@ import {
   YnisonServerError,
   YnisonUnauthorizedError,
 } from '../exceptions.js';
-import { YnisonClient } from './client.js';
-import type { YnisonClientOptions, YnisonState } from './client.js';
+import { YnisonClient, resolveToken } from './client.js';
+import type { TokenSource, YnisonClientOptions, YnisonState } from './client.js';
 import { generateDeviceId } from './messages.js';
 import type { DeviceInfoOverride } from './messages.js';
 import type { Track } from '../models/track/track.js';
@@ -89,8 +89,18 @@ export interface RealtimeEvents {
 
 /** Options for {@link RealtimeClient}. */
 export interface RealtimeOptions {
-  /** OAuth token. */
-  token: string;
+  /**
+   * OAuth token, or a provider evaluated before every (re)connect so a rotated
+   * token is picked up. `Client.realtime()` passes a provider reading `client.token`.
+   */
+  token: TokenSource;
+  /**
+   * Called once when Ynison rejects the token; return a fresh token to reconnect
+   * with it instead of stopping. `Client.realtime()` wires this to
+   * `ClientOptions.onUnauthorized`. When the token provider already returns a
+   * different token, the client reconnects without calling this.
+   */
+  onUnauthorized?: () => string | undefined | Promise<string | undefined>;
   /**
    * Device id. Defaults to a random id generated once and reused across every
    * reconnect. Keeping it stable matters: Ynison deduplicates broadcast by
@@ -287,10 +297,16 @@ export class RealtimeClient extends EventEmitter {
     this.serverBackoffMs = null;
     const gen = ++this.generation;
     const live = (): boolean => this.running && gen === this.generation;
+    let tokenOverride: string | undefined;
+    let unauthorizedRetried = false;
     while (live()) {
+      const token = tokenOverride ?? (await resolveToken(this.opts.token));
+      if (!live()) {
+        break;
+      }
       const client = new YnisonClient({
         ...this.opts.ynison,
-        token: this.opts.token,
+        token,
         deviceId: this.deviceId,
         deviceInfo: this.opts.deviceInfo ?? null,
       });
@@ -329,6 +345,7 @@ export class RealtimeClient extends EventEmitter {
         if (Date.now() - openedAt >= (this.opts.stableSessionMs ?? 5000)) {
           this.attempt = 0;
           this.serverBackoffMs = null;
+          unauthorizedRetried = false;
         } else {
           shortSession = true;
         }
@@ -342,7 +359,18 @@ export class RealtimeClient extends EventEmitter {
         if (live()) {
           this.safeEmitError(err);
         }
-        if ((err instanceof YnisonUnauthorizedError || err instanceof YnisonDeviceDisplacedError) && live()) {
+        if (err instanceof YnisonUnauthorizedError && live() && !unauthorizedRetried) {
+          // A rotated token (provider) or one refresh (onUnauthorized) gets one
+          // more attempt before the rejection becomes terminal.
+          unauthorizedRetried = true;
+          const fresh = await this.freshToken(token);
+          if (fresh) {
+            tokenOverride = typeof this.opts.token === 'function' ? undefined : fresh;
+          } else {
+            terminal = true;
+            this.terminal = err;
+          }
+        } else if ((err instanceof YnisonUnauthorizedError || err instanceof YnisonDeviceDisplacedError) && live()) {
           terminal = true;
           this.terminal = err;
         }
@@ -473,6 +501,20 @@ export class RealtimeClient extends EventEmitter {
     this.stopResolve = null;
   }
 
+  /** A token different from `rejected`: from the provider, else from `onUnauthorized`; `undefined` when none. */
+  private async freshToken(rejected: string): Promise<string | undefined> {
+    try {
+      const current = await resolveToken(this.opts.token);
+      if (current && current !== rejected) {
+        return current;
+      }
+      const refreshed = await this.opts.onUnauthorized?.();
+      return refreshed && refreshed !== rejected ? refreshed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   /** `schedule[min(attempt, last)] + random(0..250)` ms, floored by `reconnectBaseMs` and capped by `reconnectMaxMs`. */
   private backoff(): number {
     const schedule = this.serverBackoffMs ?? DEFAULT_BACKOFF_MS;
@@ -504,7 +546,8 @@ export class RealtimeClient extends EventEmitter {
       const idle = Date.now() - since;
       if (idle > staleMs) {
         this.safeEmit('stale', idle);
-        client.disconnect();
+        // terminate: a dead pipe never acknowledges a close frame.
+        client.disconnect({ force: true });
       }
     }, tick);
   }

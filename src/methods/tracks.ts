@@ -5,6 +5,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { isJsonObject } from '../base.js';
 import { Track } from '../models/track/track.js';
 import { AlbumSimilarEntities } from '../models/album/albumExtras.js';
@@ -132,7 +133,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksDownloadInfo(trackId: string | number, getDirectLinks = false): Promise<DownloadInfo[]> {
-      const url = `${this.baseUrl}/tracks/${trackId}/download-info`;
+      const url = `${this.baseUrl}/tracks/${pathSegment(trackId)}/download-info`;
       const result = await this.request.get(url);
       return DownloadInfo.deListAsync(result, this as unknown as Client, getDirectLinks);
     }
@@ -197,7 +198,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksLyrics(trackId: string | number, format: 'TEXT' | 'LRC' = 'TEXT'): Promise<TrackLyrics | null> {
-      const url = `${this.baseUrl}/tracks/${trackId}/lyrics`;
+      const url = `${this.baseUrl}/tracks/${pathSegment(trackId)}/lyrics`;
       const sign = getSignRequest(trackId);
       const result = await this.request.get(url, {
         format,
@@ -215,7 +216,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksSimilar(trackId: string | number): Promise<SimilarTracks | null> {
-      return this.getModel(`${this.baseUrl}/tracks/${trackId}/similar`, SimilarTracks.deJson);
+      return this.getModel(`${this.baseUrl}/tracks/${pathSegment(trackId)}/similar`, SimilarTracks.deJson);
     }
 
     /**
@@ -226,7 +227,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksSimilarEntities(trackId: string | number): Promise<AlbumSimilarEntities | null> {
-      return this.getModel(`${this.baseUrl}/tracks/${trackId}/similar-entities`, AlbumSimilarEntities.deJson);
+      return this.getModel(`${this.baseUrl}/tracks/${pathSegment(trackId)}/similar-entities`, AlbumSimilarEntities.deJson);
     }
 
     /**
@@ -237,7 +238,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksFullInfo(trackId: string | number): Promise<TrackFullInfo | null> {
-      return this.getModel(`${this.baseUrl}/tracks/${trackId}/full-info`, TrackFullInfo.deJson);
+      return this.getModel(`${this.baseUrl}/tracks/${pathSegment(trackId)}/full-info`, TrackFullInfo.deJson);
     }
 
     /**
@@ -248,7 +249,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksTrailer(trackId: string | number): Promise<TrackTrailer | null> {
-      return this.getModel(`${this.baseUrl}/tracks/${trackId}/trailer`, TrackTrailer.deJson);
+      return this.getModel(`${this.baseUrl}/tracks/${pathSegment(trackId)}/trailer`, TrackTrailer.deJson);
     }
 
     /**
@@ -259,7 +260,7 @@ export function TracksMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async trackSupplement(trackId: string | number): Promise<Supplement | null> {
-      return this.getModel(`${this.baseUrl}/tracks/${trackId}/supplement`, Supplement.deJson);
+      return this.getModel(`${this.baseUrl}/tracks/${pathSegment(trackId)}/supplement`, Supplement.deJson);
     }
 
     /**

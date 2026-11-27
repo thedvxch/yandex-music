@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { Presaves } from '../models/presaves.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
@@ -32,7 +33,7 @@ export function PresavesMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       userId?: string | number,
     ): Promise<Presaves | null> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/presaves`, {
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/presaves`, {
         includeReleased: String(includeReleased),
         includeUpcoming: String(includeUpcoming),
       });
@@ -54,7 +55,7 @@ export function PresavesMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
       userId?: string | number,
     ): Promise<boolean> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.post(`${this.baseUrl}/users/${uid}/presaves/add`, {
+      const result = await this.request.post(`${this.baseUrl}/users/${pathSegment(uid)}/presaves/add`, {
         albumId,
         likeAfterRelease: String(likeAfterRelease),
       });
@@ -71,7 +72,7 @@ export function PresavesMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      */
     async usersPresavesRemove(albumId: string | number, userId?: string | number): Promise<boolean> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.post(`${this.baseUrl}/users/${uid}/presaves/remove`, { albumId });
+      const result = await this.request.post(`${this.baseUrl}/users/${pathSegment(uid)}/presaves/remove`, { albumId });
       return result === 'ok';
     }
   }

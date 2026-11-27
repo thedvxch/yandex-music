@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { Credits } from '../models/credit.js';
 import type { AbstractConstructor } from './mixin.js';
 
@@ -24,7 +25,7 @@ export function CreditsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tracksCredits(trackId: string | number): Promise<Credits | null> {
-      return this.getModel(`${this.baseUrl}/tracks/${trackId}/credits`, Credits.deJson);
+      return this.getModel(`${this.baseUrl}/tracks/${pathSegment(trackId)}/credits`, Credits.deJson);
     }
 
     /**
@@ -35,7 +36,7 @@ export function CreditsMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async clipsCredits(clipId: string | number): Promise<Credits | null> {
-      return this.getModel(`${this.baseUrl}/clips/${clipId}/credits`, Credits.deJson);
+      return this.getModel(`${this.baseUrl}/clips/${pathSegment(clipId)}/credits`, Credits.deJson);
     }
   }
 

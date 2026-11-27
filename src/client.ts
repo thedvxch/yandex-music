@@ -115,8 +115,7 @@ export class Client extends ComposedClient {
    * ```
    */
   realtime(options: Partial<RealtimeOptions> = {}): RealtimeClient {
-    const token = options.token ?? this.token;
-    if (!token) {
+    if (!options.token && !this.token) {
       throw new UnauthorizedError('a token is required for the realtime API');
     }
     return new RealtimeClient({
@@ -124,8 +123,17 @@ export class Client extends ComposedClient {
         const tracks = await this.tracks([playableId]);
         return tracks[0] ?? null;
       },
+      // Read the token live on every reconnect, so rotating `client.token`
+      // (or a refresh through onUnauthorized) reaches Ynison too.
+      onUnauthorized: this.onUnauthorized
+        ? async () => {
+            const failed = this.token;
+            const ok = await this.refreshAuth(new UnauthorizedError('Ynison rejected the token', { status: 401 }), failed);
+            return ok ? this.token : undefined;
+          }
+        : undefined,
       ...options,
-      token,
+      token: options.token ?? (() => this.token),
     });
   }
 }

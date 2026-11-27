@@ -6,7 +6,8 @@
 import { createHash, createDecipheriv, type Decipher } from 'node:crypto';
 import type { Transform } from 'node:stream';
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
-import { AbortedError } from '../../exceptions.js';
+import { ForbiddenError, GoneError, InvalidResponseError, YandexMusicError } from '../../exceptions.js';
+import { DEFAULT_DOWNLOAD_TIMEOUT_MS } from '../../request.js';
 import { LyricsMajor } from './nested.js';
 import { Track } from './track.js';
 import { Artist } from '../artist/artist.js';
@@ -20,9 +21,21 @@ export type DownloadOptions = Pick<RequestOptions, 'signal' | 'timeout'>;
 /** Salt used to sign direct download links. */
 const SIGN_SALT = 'XGRlBW9FXlekgbPrRHuSiA';
 
+/**
+ * How long (ms) a resolved {@link DownloadInfo.directLink} is reused. The server
+ * keeps the signed link valid for about a minute; past this age it is resolved
+ * again before downloading.
+ */
+export const DIRECT_LINK_TTL_MS = 50_000;
+
 function xmlTagText(xml: string, tag: string): string {
-  const match = new RegExp(`<${tag}>([^<]*)</${tag}>`).exec(xml);
-  return match ? match[1]! : '';
+  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([^<]*)</${tag}>`).exec(xml);
+  return match ? match[1]!.trim() : '';
+}
+
+/** Whether a mirror loop must stop: a caller abort or a local failure (disk, key) that no other URL can fix. */
+function isFinal(error: unknown): boolean {
+  return error instanceof YandexMusicError && error.status === undefined && !error.retryable;
 }
 
 /**
@@ -44,6 +57,8 @@ export class DownloadInfo extends YandexMusicModel {
   direct?: boolean;
   /** Cached resolved direct link, populated by {@link DownloadInfo.getDirectLink}. */
   directLink?: string;
+  /** `Date.now()` when {@link DownloadInfo.directLink} was resolved. */
+  directLinkResolvedAt?: number;
 
   /** @see {@link DownloadInfo} */
   static deJson(raw: JSONValue | undefined, client?: Client): DownloadInfo | null {
@@ -82,15 +97,19 @@ export class DownloadInfo extends YandexMusicModel {
    * Resolve the short-lived direct download URL from the info XML.
    *
    * The resolved URL is valid for roughly one minute; requesting it later yields
-   * an HTTP 410. The result is cached in {@link DownloadInfo.directLink}.
+   * an HTTP 410. The result is cached in {@link DownloadInfo.directLink} (with
+   * {@link DownloadInfo.directLinkResolvedAt}); {@link DownloadInfo.download} and
+   * {@link DownloadInfo.downloadBytes} reuse it for {@link DIRECT_LINK_TTL_MS}
+   * and resolve it again when it is older or the CDN answers 403/410.
    *
    * @param options - Optional `signal` / `timeout`.
    * @returns The direct download URL.
+   * @throws {InvalidResponseError} When the info XML lacks `host`, `path`, `ts` or `s`.
    * @throws {YandexMusicError} On any transport or API error.
    */
   async getDirectLink(options: DownloadOptions = {}): Promise<string> {
     if (!this.downloadInfoUrl) {
-      throw new Error('DownloadInfo has no downloadInfoUrl.');
+      throw new InvalidResponseError('DownloadInfo has no downloadInfoUrl.');
     }
     const bytes = await this.requireClient().request.retrieve(this.downloadInfoUrl, undefined, options);
     const xml = new TextDecoder('utf-8').decode(bytes);
@@ -98,11 +117,41 @@ export class DownloadInfo extends YandexMusicModel {
     const path = xmlTagText(xml, 'path');
     const ts = xmlTagText(xml, 'ts');
     const s = xmlTagText(xml, 's');
+    if (!host || /[/?#\s]/.test(host) || !path.startsWith('/') || !ts || !s) {
+      throw new InvalidResponseError(`Unexpected download-info response: ${xml.slice(0, 200).trim()}`);
+    }
     const sign = createHash('md5')
       .update(SIGN_SALT + path.slice(1) + s, 'utf8')
       .digest('hex');
     this.directLink = `https://${host}/get-mp3/${sign}/${ts}${path}`;
+    this.directLinkResolvedAt = Date.now();
     return this.directLink;
+  }
+
+  /** Whether the cached {@link DownloadInfo.directLink} is missing or older than {@link DIRECT_LINK_TTL_MS}. */
+  get directLinkExpired(): boolean {
+    return (
+      !this.directLink ||
+      this.directLinkResolvedAt === undefined ||
+      Date.now() - this.directLinkResolvedAt >= DIRECT_LINK_TTL_MS
+    );
+  }
+
+  /**
+   * Run `use` with a fresh direct link; when a cached link is rejected with
+   * 403/410 (expired signature), resolve it once more and retry.
+   */
+  private async withDirectLink<T>(options: DownloadOptions, use: (link: string) => Promise<T>): Promise<T> {
+    const cached = this.directLinkExpired ? undefined : this.directLink;
+    const link = cached ?? (await this.getDirectLink({ signal: options.signal }));
+    try {
+      return await use(link);
+    } catch (error) {
+      if (cached && (error instanceof GoneError || error instanceof ForbiddenError)) {
+        return use(await this.getDirectLink({ signal: options.signal }));
+      }
+      throw error;
+    }
   }
 
   /**
@@ -113,8 +162,10 @@ export class DownloadInfo extends YandexMusicModel {
    * @throws {YandexMusicError} On any transport or API error.
    */
   async downloadBytes(options: DownloadOptions = {}): Promise<Uint8Array> {
-    const link = this.directLink ?? (await this.getDirectLink({ signal: options.signal }));
-    return this.requireClient().request.retrieve(link, options.timeout, { signal: options.signal });
+    const request = this.requireClient().request;
+    return this.withDirectLink(options, (link) =>
+      request.retrieve(link, options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS, { signal: options.signal }),
+    );
   }
 
   /**
@@ -125,8 +176,8 @@ export class DownloadInfo extends YandexMusicModel {
    * @throws {YandexMusicError} On any transport or API error.
    */
   async download(filename: string, options: DownloadOptions = {}): Promise<void> {
-    const link = this.directLink ?? (await this.getDirectLink({ signal: options.signal }));
-    await this.requireClient().request.streamToFile(link, filename, options);
+    const request = this.requireClient().request;
+    await this.withDirectLink(options, (link) => request.streamToFile(link, filename, options));
   }
 }
 
@@ -246,7 +297,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
   getDirectLink(): string {
     const link = this.links()[0];
     if (!link) {
-      throw new Error('LosslessDownloadInfo has no stream URL.');
+      throw new InvalidResponseError('LosslessDownloadInfo has no stream URL.');
     }
     return link;
   }
@@ -266,22 +317,33 @@ export class LosslessDownloadInfo extends YandexMusicModel {
   async downloadBytes(options: DownloadOptions = {}): Promise<Uint8Array> {
     const links = this.links();
     if (links.length === 0) {
-      throw new Error('LosslessDownloadInfo has no stream URL.');
+      throw new InvalidResponseError('LosslessDownloadInfo has no stream URL.');
     }
     const request = this.requireClient().request;
+    let bytes: Uint8Array | undefined;
     let lastError: unknown;
     for (const link of links) {
       try {
-        const bytes = await request.retrieve(link, options.timeout, { signal: options.signal });
-        return this.isEncrypted ? decryptEncraw(bytes, this.key!) : bytes;
+        bytes = await request.retrieve(link, options.timeout ?? DEFAULT_DOWNLOAD_TIMEOUT_MS, { signal: options.signal });
+        break;
       } catch (error) {
         lastError = error;
-        if (error instanceof AbortedError) {
+        if (isFinal(error)) {
           break;
         }
       }
     }
-    throw lastError;
+    if (bytes === undefined) {
+      throw lastError;
+    }
+    if (!this.isEncrypted) {
+      return bytes;
+    }
+    try {
+      return decryptEncraw(bytes, this.key!);
+    } catch (error) {
+      throw new YandexMusicError(`Cannot decrypt the stream: ${(error as Error).message}`, { cause: error, retryable: false });
+    }
   }
 
   /**
@@ -303,7 +365,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
   async download(filename: string, options: DownloadOptions & { race?: boolean } = {}): Promise<void> {
     const links = this.links();
     if (links.length === 0) {
-      throw new Error('LosslessDownloadInfo has no stream URL.');
+      throw new InvalidResponseError('LosslessDownloadInfo has no stream URL.');
     }
     const request = this.requireClient().request;
     const key = this.isEncrypted ? this.key : undefined;
@@ -319,7 +381,7 @@ export class LosslessDownloadInfo extends YandexMusicModel {
         return;
       } catch (error) {
         lastError = error;
-        if (error instanceof AbortedError) {
+        if (isFinal(error)) {
           break;
         }
       }
@@ -387,7 +449,7 @@ export class TrackLyrics extends YandexMusicModel {
    */
   async fetchLyrics(options: DownloadOptions = {}): Promise<string> {
     if (!this.downloadUrl) {
-      throw new Error('TrackLyrics has no downloadUrl.');
+      throw new InvalidResponseError('TrackLyrics has no downloadUrl.');
     }
     const bytes = await this.requireClient().request.retrieve(this.downloadUrl, options.timeout, { signal: options.signal });
     return new TextDecoder('utf-8').decode(bytes);

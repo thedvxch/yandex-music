@@ -105,6 +105,10 @@ export class About extends YandexMusicModel {
   options?: JSONValue;
   /** Whether the music service is available for the account. */
   serviceAvailable?: boolean;
+  /** ISO 3166 code of the region the request was geolocated to (for example `RU`). */
+  geoRegionIso?: string;
+  /** ISO 3166 code of the region of the user's session. */
+  userSessionRegionIso?: string;
 
   /** @see {@link About} */
   static deJson(raw: JSONValue | undefined, client?: Client): About | null {
@@ -112,7 +116,7 @@ export class About extends YandexMusicModel {
       return null;
     }
     const model = new About(client);
-    assign(model, raw, ['hasPlus', 'hasMusicSubscription', 'isChild', 'options', 'serviceAvailable']);
+    assign(model, raw, ['hasPlus', 'hasMusicSubscription', 'isChild', 'options', 'serviceAvailable', 'geoRegionIso', 'userSessionRegionIso']);
     reportUnknown(client, 'About', raw, model);
     return model;
   }

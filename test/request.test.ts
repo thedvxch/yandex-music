@@ -14,6 +14,7 @@ import {
   NetworkError,
   NotFoundError,
   PayloadTooLargeError,
+  ServerError,
   TimedOutError,
   UnauthorizedError,
   YandexMusicError,
@@ -117,11 +118,12 @@ describe('status → error class mapping', () => {
     );
   });
 
-  test('502 maps to NetworkError "Bad Gateway"', async () => {
+  test('502 maps to BadGatewayError "Bad Gateway" (still a NetworkError and a ServerError)', async () => {
     const r = reqWith('<html>bad gateway</html>', 502);
-    await expect(r.get('http://x')).rejects.toThrow(
-      expect.objectContaining({ name: 'NetworkError', message: 'Bad Gateway' }),
-    );
+    const err = await r.get('http://x').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(NetworkError);
+    expect(err).toBeInstanceOf(ServerError);
+    expect(err).toMatchObject({ name: 'BadGatewayError', message: 'Bad Gateway', status: 502, retryable: true });
   });
 
   test('409 maps to ConflictError', async () => {
@@ -185,7 +187,7 @@ describe('transport failures', () => {
           });
         }),
     });
-    const r = new Request({ fetch: fetchImpl, timeout: 20 });
+    const r = new Request({ fetch: fetchImpl, timeout: 20, bodyTimeout: 20, retries: 0 });
     await expect(r.retrieve('http://x', 20)).rejects.toBeInstanceOf(TimedOutError);
   });
 });

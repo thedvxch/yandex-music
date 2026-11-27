@@ -8,7 +8,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { ClientBase } from '../clientBase.js';
-import { AbortedError, BadRequestError, DeviceAuthError } from '../exceptions.js';
+import { AbortedError, BadRequestError, DeviceAuthError, UnauthorizedError } from '../exceptions.js';
 import { DeviceCode, OAuthToken } from '../models/deviceAuth.js';
 import type { AbstractConstructor } from './mixin.js';
 import type { Client } from '../client.js';
@@ -63,6 +63,19 @@ export type PollOutcome = OAuthToken | 'pending' | 'slow_down';
 
 const hasOAuthError = (error: unknown, name: string): boolean =>
   error instanceof BadRequestError && (error.code === name || error.message.includes(name));
+
+/**
+ * Turn an OAuth endpoint rejection (400 `invalid_grant` / `access_denied`, 401
+ * `invalid_client`) into a {@link DeviceAuthError} that keeps `code`, `status`
+ * and the original error as `cause`, so callers can tell a revoked refresh token
+ * (`code === 'invalid_grant'`: log in again) from a transient failure.
+ */
+function toDeviceAuthError(error: unknown): unknown {
+  if (error instanceof BadRequestError || error instanceof UnauthorizedError) {
+    return new DeviceAuthError(error.message, { code: error.code, status: error.status, cause: error });
+  }
+  return error;
+}
 
 /** Sleep for `ms`; rejects with {@link AbortedError} as soon as `signal` aborts. */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -169,7 +182,7 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
         if (hasOAuthError(error, 'slow_down')) {
           return 'slow_down';
         }
-        throw error instanceof BadRequestError ? new DeviceAuthError(error.message) : error;
+        throw toDeviceAuthError(error);
       }
     }
 
@@ -208,7 +221,7 @@ export function DeviceAuthMixin<TBase extends AbstractConstructor<ClientBase>>(B
         );
         token = OAuthToken.deJson(result, this as unknown as Client);
       } catch (error) {
-        throw error instanceof BadRequestError ? new DeviceAuthError(error.message) : error;
+        throw toDeviceAuthError(error);
       }
       if (!token?.accessToken) {
         throw new DeviceAuthError('failed to parse refresh token response');

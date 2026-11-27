@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import {
   ArtistConcerts,
   ArtistsWithConcerts,
@@ -33,7 +34,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async artistsConcerts(artistId: string | number): Promise<ArtistConcerts | null> {
-      return this.getModel(`${this.baseUrl}/artists/${artistId}/concerts`, ArtistConcerts.deJson);
+      return this.getModel(`${this.baseUrl}/artists/${pathSegment(artistId)}/concerts`, ArtistConcerts.deJson);
     }
 
     /**
@@ -44,7 +45,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async concertInfo(concertId: string | number): Promise<ConcertInfo | null> {
-      return this.getModel(`${this.baseUrl}/concerts/${concertId}/info`, ConcertInfo.deJson);
+      return this.getModel(`${this.baseUrl}/concerts/${pathSegment(concertId)}/info`, ConcertInfo.deJson);
     }
 
     /**
@@ -56,7 +57,7 @@ export function ConcertsMixin<TBase extends AbstractConstructor<ClientBase>>(Bas
      * @throws {YandexMusicError} On any transport or API error.
      */
     async concertSkeleton(concertId: string | number, skeletonId = 'concert_page'): Promise<ConcertSkeleton | null> {
-      return this.getModel(`${this.baseUrl}/concerts/${concertId}/skeletons/${skeletonId}`, ConcertSkeleton.deJson);
+      return this.getModel(`${this.baseUrl}/concerts/${pathSegment(concertId)}/skeletons/${pathSegment(skeletonId)}`, ConcertSkeleton.deJson);
     }
 
     /**

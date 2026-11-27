@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { YandexMusicModel, assign, deList, isJsonObject, reportUnknown } from '../../base.js';
+import { IdMissingError } from '../../exceptions.js';
 import { User } from '../user.js';
 import { CoverDerivedColors } from '../common.js';
 import { Fade, LyricsInfo, Major, MetaData, Normalization, PoetryLoverMatch, R128, SmartPreviewParams } from './nested.js';
@@ -219,11 +220,11 @@ export class Track extends YandexMusicModel {
    * Resolve this track's id.
    *
    * @returns The track id as-is (any `:album` suffix is kept), suitable for passing to API methods.
-   * @throws {Error} When the track has no id.
+   * @throws {IdMissingError} When the track has no id.
    */
   trackId(): string | number {
     if (this.id === undefined) {
-      throw new Error('Track has no id.');
+      throw new IdMissingError('Track has no id.');
     }
     return this.id;
   }

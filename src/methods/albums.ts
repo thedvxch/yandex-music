@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { Album } from '../models/album/album.js';
 import { AlbumDonations, AlbumRelatedContent, AlbumSimilarEntities, AlbumTrailer } from '../models/album/albumExtras.js';
 import type { AbstractConstructor } from './mixin.js';
@@ -36,7 +37,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsWithTracks(albumId: string | number): Promise<Album | null> {
-      return this.getModel(`${this.baseUrl}/albums/${albumId}/with-tracks`, Album.deJson);
+      return this.getModel(`${this.baseUrl}/albums/${pathSegment(albumId)}/with-tracks`, Album.deJson);
     }
 
     /**
@@ -47,7 +48,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsSimilarEntities(albumId: string | number): Promise<AlbumSimilarEntities | null> {
-      return this.getModel(`${this.baseUrl}/albums/${albumId}/similar-entities`, AlbumSimilarEntities.deJson);
+      return this.getModel(`${this.baseUrl}/albums/${pathSegment(albumId)}/similar-entities`, AlbumSimilarEntities.deJson);
     }
 
     /**
@@ -58,7 +59,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsTrailer(albumId: string | number): Promise<AlbumTrailer | null> {
-      return this.getModel(`${this.baseUrl}/albums/${albumId}/trailer`, AlbumTrailer.deJson);
+      return this.getModel(`${this.baseUrl}/albums/${pathSegment(albumId)}/trailer`, AlbumTrailer.deJson);
     }
 
     /**
@@ -69,7 +70,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsDonations(albumId: string | number): Promise<AlbumDonations | null> {
-      return this.getModel(`${this.baseUrl}/donation/albums/${albumId}`, AlbumDonations.deJson);
+      return this.getModel(`${this.baseUrl}/donation/albums/${pathSegment(albumId)}`, AlbumDonations.deJson);
     }
 
     /**
@@ -80,7 +81,7 @@ export function AlbumsMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      * @throws {YandexMusicError} On any transport or API error.
      */
     async albumsRelatedContent(albumId: string | number): Promise<AlbumRelatedContent | null> {
-      return this.getModel(`${this.baseUrl}/albums/${albumId}/related-content`, AlbumRelatedContent.deJson);
+      return this.getModel(`${this.baseUrl}/albums/${pathSegment(albumId)}/related-content`, AlbumRelatedContent.deJson);
     }
   }
 

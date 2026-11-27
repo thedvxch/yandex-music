@@ -1,8 +1,8 @@
 /** Public exports: ynison. */
 export { RealtimeClient, liveProgressMs } from '../ynison/realtime.js';
 export type { RealtimeOptions, RealtimeEvents, TrackChangeEvent, NowPlaying } from '../ynison/realtime.js';
-export { YnisonClient, parseStateFrame, parseRedirectFrame, parseServerError } from '../ynison/client.js';
-export type { YnisonState, RedirectResponse, StateListener, YnisonClientOptions } from '../ynison/client.js';
+export { YnisonClient, parseStateFrame, parseRedirectFrame, parseServerError, resolveToken } from '../ynison/client.js';
+export type { YnisonState, RedirectResponse, StateListener, YnisonClientOptions, TokenSource } from '../ynison/client.js';
 export {
   generateDeviceId,
   generateRequestId,

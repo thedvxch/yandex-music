@@ -329,6 +329,73 @@ describe('listener isolation and restart (H3, H4)', () => {
   });
 });
 
+describe('state dispatch, force close and token rotation (M4, M10, M11, M12)', () => {
+  test('waitFirstState and onState both receive the first frame; a later waitFirstState resolves at once', async () => {
+    server.stateScripts.push(sendFramesThenWait(stateFrame('first')));
+    const client = new YnisonClient({ token: 't', ...server.ynisonOptions, connectTimeoutMs: 2000 });
+    const first = client.waitFirstState(2000);
+    const seen: string[] = [];
+    client.onState((s) => {
+      seen.push(s.playableList[0]?.playableId ?? '');
+    });
+    void client.connect().catch(() => undefined);
+    expect((await first).playableList[0]?.playableId).toBe('first');
+    expect(seen).toEqual(['first']);
+    const again = await client.waitFirstState(10);
+    expect(again.playableList[0]?.playableId).toBe('first');
+    client.disconnect();
+  });
+
+  test('the stale watchdog force-closes the socket (terminate, not a close handshake)', async () => {
+    await server.close();
+    server = await FakeYnisonServer.start({ keepAlive: { time: 60, timeout: 60 }, autoPong: false });
+    server.stateScripts.push(sendFramesThenWait(stateFrame()));
+    const calls: Array<{ force?: boolean } | undefined> = [];
+    const original = YnisonClient.prototype.disconnect;
+    vi.spyOn(YnisonClient.prototype, 'disconnect').mockImplementation(function (this: YnisonClient, o) {
+      calls.push(o);
+      original.call(this, o);
+    });
+    const rt = realtime({ staleTimeoutMs: 300, reconnect: false });
+    const started = Date.now();
+    await rt.start();
+    expect(calls.some((o) => o?.force === true)).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  test('a token provider that rotated after a 401 reconnects instead of stopping', async () => {
+    server.stateScripts.push(sendFramesThenClose(UNAUTHORIZED_FRAME));
+    server.stateScripts.push(sendFramesThenWait(stateFrame()));
+    let current = 'old';
+    const rt = realtime({ token: () => current });
+    rt.on('error', () => {
+      current = 'new';
+    });
+    const done = rt.start();
+    await waitEvent(rt, 'open');
+    expect(server.stateCount).toBe(2);
+    expect(rt.terminalError).toBeNull();
+    rt.stop();
+    await done;
+  });
+
+  test('a constant token gets one onUnauthorized refresh, then a second 401 is terminal', async () => {
+    server.stateScripts.push(sendFramesThenClose(UNAUTHORIZED_FRAME));
+    server.stateScripts.push(sendFramesThenClose(UNAUTHORIZED_FRAME));
+    let refreshes = 0;
+    const rt = realtime({
+      onUnauthorized: async () => {
+        refreshes += 1;
+        return 'fresh';
+      },
+    });
+    await rt.start();
+    expect(refreshes).toBe(1);
+    expect(server.stateCount).toBe(2);
+    expect(rt.terminalError).toBeInstanceOf(YnisonUnauthorizedError);
+  });
+});
+
 describe('YnisonClient robustness', () => {
   test('a server that accepts but never answers gives YnisonTimeoutError', async () => {
     server.stateScripts.push(stayInSilence);

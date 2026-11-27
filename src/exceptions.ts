@@ -9,23 +9,60 @@
  * @packageDocumentation
  */
 
+/**
+ * Whether an HTTP status is transient and worth retrying: `408`, `425`, `429`
+ * and every `5xx`.
+ *
+ * @param status - HTTP status code.
+ * @returns `true` for a retryable status.
+ */
+export function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599);
+}
+
+/** Options accepted by every {@link YandexMusicError} constructor. */
+export interface YandexMusicErrorOptions {
+  /** The underlying error. */
+  cause?: unknown;
+  /** HTTP status code. */
+  status?: number;
+  /** Machine-readable error code. */
+  code?: string;
+  /** Server-requested wait before retrying, in milliseconds. */
+  retryAfterMs?: number;
+  /** Override the computed {@link YandexMusicError.retryable}. */
+  retryable?: boolean;
+}
+
 /** Base class for every error raised by the library. */
 export class YandexMusicError extends Error {
+  /** Default {@link YandexMusicError.retryable} for errors without an HTTP status. */
+  protected static readonly defaultRetryable: boolean = false;
   /** HTTP status code, when the error originates from an HTTP response. */
   readonly status?: number;
   /** Machine-readable error code from the response body (for example the OAuth `error` field). */
   readonly code?: string;
   /** Server-requested wait before retrying (`Retry-After`), in milliseconds. */
   readonly retryAfterMs?: number;
+  /**
+   * Whether repeating the same operation may succeed. Decided by the HTTP
+   * status when there is one (see {@link isRetryableStatus}); otherwise by the
+   * error class: transport failures and timeouts are retryable, everything
+   * else (bad input, local file-system or crypto failures, cancellation) is not.
+   * The transport retries exactly the errors where this is `true`.
+   */
+  readonly retryable: boolean;
 
-  constructor(
-    message?: string,
-    options?: { cause?: unknown; status?: number; code?: string; retryAfterMs?: number },
-  ) {
+  constructor(message?: string, options?: YandexMusicErrorOptions) {
     super(message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.status = options?.status;
     this.code = options?.code;
     this.retryAfterMs = options?.retryAfterMs;
+    this.retryable =
+      options?.retryable ??
+      (options?.status !== undefined
+        ? isRetryableStatus(options.status)
+        : (new.target as unknown as { defaultRetryable: boolean }).defaultRetryable);
     // Restore the prototype chain — required when targeting ES5/ES2015 down-level,
     // and harmless otherwise. Also gives every subclass a correct `name`.
     this.name = new.target.name;
@@ -33,8 +70,19 @@ export class YandexMusicError extends Error {
   }
 }
 
-/** Raised on authentication/authorization failures (HTTP 401/403, invalid token). */
+/** Raised on authentication/authorization failures (HTTP 401/403, invalid token). See {@link ForbiddenError} for 403. */
 export class UnauthorizedError extends YandexMusicError {}
+
+/**
+ * Raised on HTTP 403: the token is valid but not allowed this resource (region,
+ * subscription, foreign content). Subclasses {@link UnauthorizedError} so
+ * existing `instanceof UnauthorizedError` checks keep matching; refresh a token
+ * only on a plain 401 (`!(e instanceof ForbiddenError)` or `e.status === 401`).
+ */
+export class ForbiddenError extends UnauthorizedError {}
+
+/** Raised when the API answers 2xx with an unusable body (malformed JSON or XML, an `error` envelope, missing fields). */
+export class InvalidResponseError extends YandexMusicError {}
 
 /** Raised when a track is requested with a bitrate/codec that is not available. */
 export class InvalidBitrateError extends YandexMusicError {}
@@ -42,26 +90,43 @@ export class InvalidBitrateError extends YandexMusicError {}
 /** Raised when an operation needs an identifier that was not provided. */
 export class IdMissingError extends YandexMusicError {}
 
-/** Base class for errors caused by communication with the server. */
-export class NetworkError extends YandexMusicError {}
+/** Base class for errors caused by communication with the server. Transport failures without a status are retryable. */
+export class NetworkError extends YandexMusicError {
+  protected static override readonly defaultRetryable: boolean = true;
+}
+
+/**
+ * Raised on a definitive HTTP 4xx answer (other than auth, 408, 425 and 429).
+ * Not retryable. The specific subclasses below cover the common statuses;
+ * anything else (405, 422, 451, …) is a plain `ClientError` with `status` set.
+ */
+export class ClientError extends NetworkError {
+  protected static override readonly defaultRetryable: boolean = false;
+}
 
 /** Raised when the server rejects a request as malformed (HTTP 400). */
-export class BadRequestError extends NetworkError {}
+export class BadRequestError extends ClientError {}
 
 /** Raised when the requested resource does not exist (HTTP 404). */
-export class NotFoundError extends NetworkError {}
+export class NotFoundError extends ClientError {}
 
 /** Raised when the request conflicts with the resource's current state (HTTP 409). Deterministic — retrying an identical request fails the same way. */
-export class ConflictError extends NetworkError {}
+export class ConflictError extends ClientError {}
+
+/** Raised when a resource is permanently gone (HTTP 410), for example an expired direct download link. */
+export class GoneError extends ClientError {}
 
 /** Raised when the request payload exceeds the server's size limit (HTTP 413). Deterministic — retrying an identical request fails the same way. */
-export class PayloadTooLargeError extends NetworkError {}
+export class PayloadTooLargeError extends ClientError {}
 
 /** Raised when the server throttles the client (HTTP 429). Retryable; see `retryAfterMs`. */
 export class TooManyRequestsError extends NetworkError {}
 
 /** Raised on server-side failures (HTTP 5xx). Retryable. */
 export class ServerError extends NetworkError {}
+
+/** Raised on HTTP 502. Message stays `Bad Gateway` for compatibility with 0.4.0, which threw a plain {@link NetworkError}. */
+export class BadGatewayError extends ServerError {}
 
 /**
  * Raised when the caller cancels an operation through an `AbortSignal`
@@ -70,7 +135,7 @@ export class ServerError extends NetworkError {}
  */
 export class AbortedError extends YandexMusicError {
   constructor(message = 'Aborted', options?: { cause?: unknown }) {
-    super(message, options);
+    super(message, { cause: options?.cause, retryable: false });
   }
 }
 

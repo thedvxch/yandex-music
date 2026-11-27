@@ -2,6 +2,12 @@
 export {
   YandexMusicError,
   UnauthorizedError,
+  ForbiddenError,
+  InvalidResponseError,
+  ClientError,
+  GoneError,
+  BadGatewayError,
+  isRetryableStatus,
   InvalidBitrateError,
   IdMissingError,
   NetworkError,
@@ -21,4 +27,4 @@ export {
   YnisonTimeoutError,
   YnisonConnectionClosedError,
 } from '../exceptions.js';
-export type { YnisonServerErrorOptions } from '../exceptions.js';
+export type { YnisonServerErrorOptions, YandexMusicErrorOptions } from '../exceptions.js';

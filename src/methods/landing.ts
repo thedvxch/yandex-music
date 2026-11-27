@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { deList } from '../base.js';
 import {
   ChartInfo,
@@ -59,7 +60,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      */
     async chart(chartOption = ''): Promise<ChartInfo | null> {
       const url = chartOption
-        ? `${this.baseUrl}/landing3/chart/${chartOption}`
+        ? `${this.baseUrl}/landing3/chart/${pathSegment(chartOption)}`
         : `${this.baseUrl}/landing3/chart`;
       const result = await this.request.get(url);
       return ChartInfo.deJson(result, this as unknown as Client);
@@ -234,7 +235,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
       page = 0,
       pageSize = 20,
     ): Promise<UniversalScreenEntitiesPage | null> {
-      const url = `${this.baseUrl}/landing/block/${blockId}/entities`;
+      const url = `${this.baseUrl}/landing/block/${pathSegment(blockId)}/entities`;
       const result = await this.request.get(url, { page, 'page-size': pageSize });
       return UniversalScreenEntitiesPage.deJson(result, this as unknown as Client);
     }
@@ -255,7 +256,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
       page = 0,
       pageSize = 20,
     ): Promise<UniversalScreenEntitiesPage | null> {
-      const url = `${this.baseUrl}/landing-blocks/entities/tag/${metaTagId}/block/${metaTagType}`;
+      const url = `${this.baseUrl}/landing-blocks/entities/tag/${pathSegment(metaTagId)}/block/${pathSegment(metaTagType)}`;
       const result = await this.request.get(url, { page, 'page-size': pageSize });
       return UniversalScreenEntitiesPage.deJson(result, this as unknown as Client);
     }
@@ -291,7 +292,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async nonMusicCategoryAlbums(name: string): Promise<AlbumIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/non-music/category/${name}/albums`);
+      const result = await this.request.get(`${this.baseUrl}/non-music/category/${pathSegment(name)}/albums`);
       return AlbumIds.deJson(result, this as unknown as Client);
     }
 
@@ -303,7 +304,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async nonMusicCompilation(compilationId: string): Promise<AlbumEntitiesIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/non-music/compilations/${compilationId}`);
+      const result = await this.request.get(`${this.baseUrl}/non-music/compilations/${pathSegment(compilationId)}`);
       return AlbumEntitiesIds.deJson(result, this as unknown as Client);
     }
 
@@ -315,7 +316,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async nonMusicEditorialAlbum(name: string): Promise<AlbumEntitiesIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/non-music/editorial/album/${name}`);
+      const result = await this.request.get(`${this.baseUrl}/non-music/editorial/album/${pathSegment(name)}`);
       return AlbumEntitiesIds.deJson(result, this as unknown as Client);
     }
 
@@ -327,7 +328,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async nonMusicEditorialPlaylist(name: string): Promise<PlaylistEntitiesIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/non-music/editorial/playlist/${name}`);
+      const result = await this.request.get(`${this.baseUrl}/non-music/editorial/playlist/${pathSegment(name)}`);
       return PlaylistEntitiesIds.deJson(result, this as unknown as Client);
     }
 
@@ -339,7 +340,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async childrenLandingCategoryAlbums(name: string): Promise<AlbumIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/children-landing/category/${name}/albums`);
+      const result = await this.request.get(`${this.baseUrl}/children-landing/category/${pathSegment(name)}/albums`);
       return AlbumIds.deJson(result, this as unknown as Client);
     }
 
@@ -351,7 +352,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async childrenLandingCompilation(compilationId: string): Promise<AlbumEntitiesIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/children-landing/compilations/${compilationId}`);
+      const result = await this.request.get(`${this.baseUrl}/children-landing/compilations/${pathSegment(compilationId)}`);
       return AlbumEntitiesIds.deJson(result, this as unknown as Client);
     }
 
@@ -363,7 +364,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async childrenLandingEditorialAlbum(name: string): Promise<AlbumEntitiesIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/children-landing/editorial/album/${name}`);
+      const result = await this.request.get(`${this.baseUrl}/children-landing/editorial/album/${pathSegment(name)}`);
       return AlbumEntitiesIds.deJson(result, this as unknown as Client);
     }
 
@@ -375,7 +376,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async childrenLandingEditorialPlaylist(name: string): Promise<PlaylistEntitiesIds | null> {
-      const result = await this.request.get(`${this.baseUrl}/children-landing/editorial/playlist/${name}`);
+      const result = await this.request.get(`${this.baseUrl}/children-landing/editorial/playlist/${pathSegment(name)}`);
       return PlaylistEntitiesIds.deJson(result, this as unknown as Client);
     }
 
@@ -409,7 +410,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async recapSlidesArtist(artistId: string | number): Promise<RecapSlides | null> {
-      const result = await this.request.get(`${this.baseUrl}/recap-slides/artist/${artistId}`);
+      const result = await this.request.get(`${this.baseUrl}/recap-slides/artist/${pathSegment(artistId)}`);
       return RecapSlides.deJson(result, this as unknown as Client);
     }
 
@@ -421,7 +422,7 @@ export function LandingMixin<TBase extends AbstractConstructor<ClientBase>>(Base
      * @throws {YandexMusicError} On any transport or API error.
      */
     async tags(tagId: string): Promise<TagResult | null> {
-      const result = await this.request.get(`${this.baseUrl}/tags/${tagId}/playlist-ids`);
+      const result = await this.request.get(`${this.baseUrl}/tags/${pathSegment(tagId)}/playlist-ids`);
       return TagResult.deJson(result, this as unknown as Client);
     }
   }

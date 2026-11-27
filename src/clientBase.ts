@@ -9,7 +9,7 @@
  */
 import { deList, type UnknownFieldReporter } from './base.js';
 import { Request, type FetchLike, type RequestOptions } from './request.js';
-import { IdMissingError } from './exceptions.js';
+import { IdMissingError, type UnauthorizedError } from './exceptions.js';
 import type { Client } from './client.js';
 import type { Status } from './models/account/account.js';
 import type { DeJson, JSONValue } from './types.js';
@@ -71,7 +71,26 @@ export interface ClientOptions {
    * Ignored when `request` is supplied (set `RequestInit.authOrigins` there).
    */
   authOrigins?: string[];
+  /**
+   * Called when the API answers HTTP 401 (never on 403). The returned token is
+   * stored as `client.token` and the request is repeated once. Concurrent 401s
+   * share one call (single flight), and a request that failed with a token that
+   * was already rotated is simply repeated with the current one. The realtime
+   * client created by `client.realtime()` uses the same hook when Ynison rejects
+   * the token.
+   */
+  onUnauthorized?: UnauthorizedHandler;
 }
+
+/**
+ * Supplies a fresh OAuth token after the API answered 401 — for example by
+ * running `refreshAccessToken` with a stored refresh token. Return the new
+ * token, or `undefined` to give up (the original error is then thrown).
+ */
+export type UnauthorizedHandler = (error: UnauthorizedError) => string | undefined | Promise<string | undefined>;
+
+/** The in-flight token refresh per client, shared by concurrent 401s (a WeakMap: private members break the mixin `.d.ts`). */
+const inFlightRefresh = new WeakMap<object, Promise<boolean>>();
 
 /** Object types addressable through the batch "list" endpoints. */
 export type BatchObjectType = 'track' | 'album' | 'artist' | 'playlist';
@@ -101,6 +120,8 @@ export abstract class ClientBase {
   me?: Status;
   /** Account uid, populated by {@link Client.init}. */
   accountUid?: number;
+  /** Token refresh hook; see {@link ClientOptions.onUnauthorized}. */
+  onUnauthorized?: UnauthorizedHandler;
   /** The HTTP transport. */
   readonly request: Request;
 
@@ -129,6 +150,7 @@ export abstract class ClientBase {
     this.device = options.device ?? DEFAULT_DEVICE;
     this.reportUnknownFields = options.reportUnknownFields ?? false;
     this.onUnknownField = options.onUnknownField;
+    this.onUnauthorized = options.onUnauthorized;
 
     if (options.request) {
       this.request = options.request;
@@ -192,6 +214,45 @@ export abstract class ClientBase {
   /** `util.inspect` / `console.log` output with the token redacted. */
   [Symbol.for('nodejs.util.inspect.custom')](): string {
     return `Client ${JSON.stringify(this.toJSON())}`;
+  }
+
+  /**
+   * Refresh the token after a 401 through {@link ClientOptions.onUnauthorized}.
+   *
+   * @internal Used by the transport and the realtime client; not part of the public API.
+   * @param error - The 401 that triggered the refresh.
+   * @param failedToken - The token the failed request was sent with. When the
+   *   current token already differs (another caller refreshed it meanwhile),
+   *   no new refresh is started.
+   * @returns Whether a different token is now in place (repeat the request).
+   */
+  async refreshAuth(error: UnauthorizedError, failedToken?: string): Promise<boolean> {
+    if (this.token && this.token !== failedToken) {
+      return true;
+    }
+    const hook = this.onUnauthorized;
+    if (!hook) {
+      return false;
+    }
+    let pending = inFlightRefresh.get(this);
+    if (!pending) {
+      pending = (async (): Promise<boolean> => {
+        try {
+          const next = await hook(error);
+          if (next && next !== failedToken) {
+            this.token = next;
+            return true;
+          }
+          return false;
+        } catch {
+          return false;
+        } finally {
+          inFlightRefresh.delete(this);
+        }
+      })();
+      inFlightRefresh.set(this, pending);
+    }
+    return pending;
   }
 
   /**

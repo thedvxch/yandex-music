@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 import { ClientBase } from '../clientBase.js';
+import { pathSegment } from '../utils/path.js';
 import { deList } from '../base.js';
 import { BadRequestError } from '../exceptions.js';
 import { Search, SearchHistoryItem, SearchInstant, Suggestions } from '../models/search/search.js';
@@ -136,7 +137,7 @@ export function SearchMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      */
     async usersSearchHistory(userId?: string | number): Promise<SearchHistoryItem[]> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/search-history`);
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/search-history`);
       return deList(SearchHistoryItem.deJson, result, this as unknown as Client);
     }
 
@@ -149,7 +150,7 @@ export function SearchMixin<TBase extends AbstractConstructor<ClientBase>>(Base:
      */
     async usersSearchHistoryClear(userId?: string | number): Promise<boolean> {
       const uid = this.resolveUid(userId);
-      const result = await this.request.get(`${this.baseUrl}/users/${uid}/search-history/clear`);
+      const result = await this.request.get(`${this.baseUrl}/users/${pathSegment(uid)}/search-history/clear`);
       return result === 'ok';
     }
   }

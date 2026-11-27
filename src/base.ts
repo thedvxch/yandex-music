@@ -3,6 +3,7 @@
  *
  * @packageDocumentation
  */
+import { YandexMusicError } from './exceptions.js';
 import type { Client } from './client.js';
 import type { DeJson, JSONObject, JSONValue } from './types.js';
 
@@ -305,11 +306,11 @@ export abstract class YandexMusicModel {
    * clear message instead of a generic "cannot read property of undefined".
    *
    * @returns The owning {@link Client}.
-   * @throws {Error} When the model was created without a client.
+   * @throws {YandexMusicError} When the model was created without a client.
    */
   protected requireClient(): Client {
     if (!this.client) {
-      throw new Error('This operation requires a Client, but the model was created without one.');
+      throw new YandexMusicError('This operation requires a Client, but the model was created without one.');
     }
     return this.client;
   }

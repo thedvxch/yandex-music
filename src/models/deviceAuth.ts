@@ -63,6 +63,8 @@ export class OAuthToken extends YandexMusicModel {
   expiresIn?: number;
   /** Token type, typically `bearer`. */
   tokenType?: string;
+  /** Expiry as epoch milliseconds, computed from `expiresIn` when the response was parsed. */
+  expiresAt?: number;
 
   /** @see {@link OAuthToken} */
   static deJson(raw: JSONValue | undefined, client?: Client): OAuthToken | null {
@@ -74,6 +76,9 @@ export class OAuthToken extends YandexMusicModel {
     model.refreshToken = pick(raw, 'refresh_token', 'refreshToken');
     model.expiresIn = pick(raw, 'expires_in', 'expiresIn');
     model.tokenType = pick(raw, 'token_type', 'tokenType');
+    if (typeof model.expiresIn === 'number' && Number.isFinite(model.expiresIn)) {
+      model.expiresAt = Date.now() + model.expiresIn * 1000;
+    }
     reportUnknown(client, 'OAuthToken', raw, model);
     return model;
   }
